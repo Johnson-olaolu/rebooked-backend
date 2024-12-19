@@ -27,7 +27,8 @@ public class UserService {
     private final MailService mailService;
 
     public User createUser(CreateUserDto createUserDto) {
-        Role role = roleService.getRoleByName(createUserDto.role());
+        String roleName = createUserDto.role() != null ? createUserDto.role() : "user";
+        Role role = roleService.getRoleByName(roleName);
         User user = new User();
         user.setFullName(createUserDto.fullName());
         user.setPassword(createUserDto.password());
@@ -78,7 +79,7 @@ public class UserService {
         String changePasswordToken = Misc.getToken();
         LocalDate dateAfter2weeks = LocalDate.now().plusWeeks(2);
         user.setChangePasswordToken(changePasswordToken);
-        user.setConfirmEmailTokenTTL(dateAfter2weeks);
+        user.setChangePasswordTokenTTL(dateAfter2weeks);
         mailService.sendChangepasswordMail(user);
         return userRepository.save(user);
     }

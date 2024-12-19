@@ -4,6 +4,7 @@ import com.personal.rebooked.user.models.User;
 import jakarta.mail.MessagingException;
 import jakarta.mail.internet.MimeMessage;
 import lombok.RequiredArgsConstructor;
+import org.springframework.beans.factory.annotation.Value;
 import org.springframework.http.HttpStatus;
 import org.springframework.mail.javamail.JavaMailSender;
 import org.springframework.mail.javamail.MimeMessageHelper;
@@ -18,6 +19,9 @@ import java.util.logging.Logger;
 @RequiredArgsConstructor
 @Service
 public class MailService {
+    @Value("${client.data-url}")
+    String clientUrl ;
+
     private final Logger logger =  Logger.getLogger(MailService.class.getName());
     private final JavaMailSender mailSender;
     private final TemplateEngine templateEngine;
@@ -55,8 +59,7 @@ public class MailService {
     public void sendChangepasswordMail (User user) {
         Context context = new Context();
         context.setVariable("name", user.getFullName());
-        context.setVariable("url", user.getChangePasswordToken());
-
+        context.setVariable("url", String.format("%s/auth/change-password?email=%s&token=%s", clientUrl, user.getEmail(), user.getChangePasswordToken()));
         try {
             sendMail(user.getEmail(), "Forgot Password","forgot_password", context);
             logger.info(String.format("Forgot password email sent to %s created", user.getEmail()));

@@ -1,5 +1,7 @@
-package com.personal.rebooked.user.models;
+package com.personal.rebooked.file.models;
 
+import com.personal.rebooked.user.models.User;
+import jakarta.validation.constraints.NotBlank;
 import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
@@ -10,19 +12,28 @@ import org.springframework.data.mongodb.core.mapping.Document;
 import java.time.LocalDateTime;
 
 @Data
-@Document("profile")
-public class Profile {
+@Document
+public class File {
     @Id
     private String id;
 
-    private String userName;
-
-    private String contactEmail;
-
-    private String contactPhone;
-
     @DBRef
-    private Address address;
+    private User user;
+
+    @NotBlank
+    private String name;
+
+    @NotBlank
+    private String url;
+
+    @NotBlank
+    private String mimetype;
+
+    @NotBlank
+    private String size;
+
+    @NotBlank
+    private String cloudinaryId;
 
     @CreatedDate
     private LocalDateTime createdAt;

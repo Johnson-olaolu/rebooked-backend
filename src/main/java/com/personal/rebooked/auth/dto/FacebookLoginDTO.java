@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 
 public record FacebookLoginDTO(
         @NotBlank String accessToken,
-        @NotBlank String role
+        String role
 ) {
     FacebookLoginDTO ( String accessToken){
         this(accessToken, "user");

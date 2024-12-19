@@ -48,6 +48,9 @@ public class User implements UserDetails {
     @DBRef
     private Role role;
 
+    @DBRef
+    private Profile profile;
+
     @NotNull()
     private boolean isEmailVerified = false;
 

@@ -12,11 +12,11 @@ import java.io.IOException;
 import java.security.GeneralSecurityException;
 import java.util.Collections;
 
-@RequiredArgsConstructor
+
 @Service
 public class GoogleVerificationService {
 
-    private GoogleIdTokenVerifier verifier;
+    private final GoogleIdTokenVerifier verifier;
 
     @Value("${google.client-id}")
     private String clientId;
@@ -24,8 +24,7 @@ public class GoogleVerificationService {
     @Value("${google.client-secret}")
     private String clientSecret;
 
-    public void GoogleTokenVerifierService() {
-        System.out.println(clientId);
+    public  GoogleVerificationService(@Value("${google.client-id}") String clientId) {
         verifier = new GoogleIdTokenVerifier.Builder(new NetHttpTransport(), new GsonFactory())
                 .setAudience(Collections.singletonList(clientId))
                 .build();

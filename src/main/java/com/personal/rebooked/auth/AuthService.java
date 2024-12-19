@@ -68,7 +68,8 @@ public class AuthService {
                     (String) googleDetails.get("email"),
                     (String) googleDetails.get("name"),
                     (String) googleDetails.get("googleId"),
-                    (String) googleDetails.get("name")
+                    true,
+                    (String) googleDetails.get("role")
             );
             User newUser = userService.createUser(createUserDto, Constants.RegistrationType.GOOGLE);
             return loginUser(newUser);
@@ -101,8 +102,9 @@ public   LoginResponseDTO handleFacebookLoginToken(FacebookLoginDTO facebookLogi
             CreateUserDto createUserDto = new CreateUserDto(
                     (String) facebookDetails.get("email"),
                     (String) facebookDetails.get("name"),
-                    (String) facebookDetails.get("googleId"),
-                    (String) facebookDetails.get("name")
+                    (String) facebookDetails.get("facebookId"),
+                    true,
+                    (String) facebookDetails.get("role")
             );
             User newUser = userService.createUser(createUserDto, Constants.RegistrationType.FACEBOOK);
             return loginUser(newUser);

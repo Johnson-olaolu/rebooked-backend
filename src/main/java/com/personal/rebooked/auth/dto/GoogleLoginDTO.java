@@ -4,7 +4,7 @@ import jakarta.validation.constraints.NotBlank;
 
 public record GoogleLoginDTO(
        @NotBlank String accessToken,
-       @NotBlank String role
+       String role
 ) {
     GoogleLoginDTO ( String accessToken){
         this(accessToken, "user");

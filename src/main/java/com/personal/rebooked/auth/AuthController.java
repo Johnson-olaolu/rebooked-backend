@@ -21,6 +21,7 @@ public class AuthController {
 
     @PostMapping("/register")
     public ResponseEntity<Object>register ( @RequestBody @Valid CreateUserDto createUserDto){
+        System.out.println( createUserDto );
         LoginResponseDTO loginResponseDTO = authService.register(createUserDto);
         return ResponseHandler.generateResponse(loginResponseDTO, "User registered successfully");
     }

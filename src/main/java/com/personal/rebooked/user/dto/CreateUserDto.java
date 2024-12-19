@@ -8,9 +8,10 @@ public record CreateUserDto(
         @Email @NotBlank String email,
         @NotBlank String fullName,
         @NotBlank  @Pattern(regexp = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=])(?=\\S+$).{8,}$") String password,
+        @NotBlank boolean isVerified,
         String role
 ) {
     public  CreateUserDto ( String email, String fullName, String password) {
-        this (email, fullName, password, "user");
+        this (email, fullName, password, false, "user");
     }
 }

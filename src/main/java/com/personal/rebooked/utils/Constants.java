@@ -16,7 +16,8 @@ public class Constants {
    public static CreateUserDto superAdminDetails = new CreateUserDto(
            "johnsonolaolu@gmail.com",
            "Super Admin",
-           "admin",
+           "Admin_123",
+           true,
            "superAdmin"
     );
 
