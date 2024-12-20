@@ -1,5 +1,6 @@
 package com.personal.rebooked.user.models;
 
+import com.personal.rebooked.file.models.File;
 import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
@@ -17,9 +18,16 @@ public class Profile {
 
     private String userName;
 
+    private String bio;
+
     private String contactEmail;
 
     private String contactPhone;
+
+    @DBRef
+    private File profilePicture;
+
+    private String profilePictureUrl;
 
     @DBRef
     private Address address;

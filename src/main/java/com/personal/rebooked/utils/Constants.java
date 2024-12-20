@@ -14,11 +14,12 @@ public class Constants {
     );
 
    public static CreateUserDto superAdminDetails = new CreateUserDto(
-           "johnsonolaolu@gmail.com",
+           "super_admin@rebooked.com",
            "Super Admin",
            "Admin_123",
            true,
-           "superAdmin"
+           "superAdmin",
+           null
     );
 
    public enum RegistrationType {

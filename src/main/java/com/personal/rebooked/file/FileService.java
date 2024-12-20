@@ -22,31 +22,43 @@ public class FileService {
     private final CloudinaryService cloudinaryService;
 
 
-    public File upload(MultipartFile file , User user) {
+    public File upload(MultipartFile file, User user) {
         Map<String, Object> metadata = cloudinaryService.upload(file);
         File newFile = new File();
-        newFile.setSize(Misc.getStringSizeLengthFile( file.getSize()));
+        newFile.setSize(Misc.getStringSizeLengthFile(file.getSize()));
         newFile.setName(file.getOriginalFilename());
         newFile.setMimetype(file.getContentType());
         newFile.setUrl((String) metadata.get("secure_url"));
         newFile.setCloudinaryId((String) metadata.get("public_id"));
         newFile.setUser(user);
-        System.out.println(newFile);
-
         return fileRepository.save(newFile);
     }
 
-    public File getFile(String fileId) {
+    public File getFileById(String fileId) {
         return fileRepository.findById(fileId).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, String.format("File with id %s not found", fileId)));
     }
 
-    public void deleteFile(String fileId) {
-        File file = getFile(fileId);
-        cloudinaryService.delete(file.getCloudinaryId());
-        fileRepository.deleteById(fileId);
+    public List<File> getUserFiles(String userId) {
+        return fileRepository.findFilesByUserId(userId);
     }
 
-    public List<File> getUserFiles( String userId) {
-        return  fileRepository.findFilesByUserId(userId);
+    public File updateFile(String id, MultipartFile file, User user) {
+        File fileData = getFileById(id);
+        cloudinaryService.delete(fileData.getCloudinaryId());
+        Map<String, Object> metadata = cloudinaryService.upload(file);
+        fileData.setSize(Misc.getStringSizeLengthFile(file.getSize()));
+        fileData.setName(file.getOriginalFilename());
+        fileData.setMimetype(file.getContentType());
+        fileData.setUrl((String) metadata.get("secure_url"));
+        fileData.setCloudinaryId((String) metadata.get("public_id"));
+        fileData.setUser(user);
+
+        return fileRepository.save(fileData);
+    }
+
+    public void deleteFile(String fileId) {
+        File file = getFileById(fileId);
+        cloudinaryService.delete(file.getCloudinaryId());
+        fileRepository.deleteById(fileId);
     }
 }

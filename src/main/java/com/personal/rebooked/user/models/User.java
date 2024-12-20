@@ -51,6 +51,8 @@ public class User implements UserDetails {
     @DBRef
     private Profile profile;
 
+    private  boolean isOnboarded = false;
+
     @NotNull()
     private boolean isEmailVerified = false;
 

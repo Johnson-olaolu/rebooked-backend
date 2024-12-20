@@ -18,7 +18,6 @@ public class FacebookVerificationService {
             if (response == null || response.containsKey("error")) {
                 throw new IllegalArgumentException("Invalid Facebook token");
             }
-            System.out.println(response);
             return response;
         } catch (Exception e) {
             throw new IllegalArgumentException("Failed to verify Facebook token", e);

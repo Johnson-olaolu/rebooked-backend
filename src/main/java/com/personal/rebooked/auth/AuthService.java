@@ -35,7 +35,7 @@ public class AuthService {
 
     public LoginResponseDTO login(LoginRequestDTO loginRequestDTO) {
         User user = userService.findUserByEmail(loginRequestDTO.email());
-        if(user.getRegistrationType() != Constants.RegistrationType.EMAIL) {
+        if (user.getRegistrationType() != Constants.RegistrationType.EMAIL) {
             throw new ResponseStatusException(HttpStatus.BAD_REQUEST, "Please login using %s".formatted(user.getRegistrationType().toString().toLowerCase()));
         }
         return loginUser(user);
@@ -44,13 +44,12 @@ public class AuthService {
     public LoginResponseDTO handleGoogleLoginToken(GoogleLoginDTO googleLoginDTO) {
         try {
             GoogleIdToken.Payload payload = googleVerificationService.verifyToken(googleLoginDTO.accessToken());
-            System.out.println(payload.values());
             Map<String, Object> googleDetails = new HashMap<>();
             googleDetails.put("email", payload.getEmail());
             googleDetails.put("role", googleLoginDTO.role());
             googleDetails.put("name", payload.get("name"));
             googleDetails.put("googleId", payload.getSubject());
-//            googleDetails.put("picture", payload.get("picture"));
+            googleDetails.put("picture", payload.get("picture"));
             return googleLogin(googleDetails);
         } catch (Exception e) {
             e.printStackTrace();
@@ -64,36 +63,39 @@ public class AuthService {
             User user = userService.findUserByEmail(email);
             return loginUser(user);
         } catch (Exception e) {
+//            System.out.println(googleDetails);
             CreateUserDto createUserDto = new CreateUserDto(
                     (String) googleDetails.get("email"),
                     (String) googleDetails.get("name"),
                     (String) googleDetails.get("googleId"),
                     true,
-                    (String) googleDetails.get("role")
+                    (String) googleDetails.get("role"),
+                    googleDetails.get("picture") != null ? (String) googleDetails.get("picture") : null
             );
-            User newUser = userService.createUser(createUserDto, Constants.RegistrationType.GOOGLE);
+//            System.out.println(createUserDto);
+            User newUser = userService.createUserOauth(createUserDto, Constants.RegistrationType.GOOGLE);
             return loginUser(newUser);
         }
     }
 
-public   LoginResponseDTO handleFacebookLoginToken(FacebookLoginDTO facebookLoginDTO) {
+    public LoginResponseDTO handleFacebookLoginToken(FacebookLoginDTO facebookLoginDTO) {
         try {
-           var payload = facebookVerificationService.verifyToken(facebookLoginDTO.accessToken());
-            System.out.println(payload.values());
+            var payload = facebookVerificationService.verifyToken(facebookLoginDTO.accessToken());
+            Map<String, Map> pictureData = (Map) payload.get("picture");
             Map<String, Object> facebookDetails = new HashMap<>();
             facebookDetails.put("email", payload.get("email"));
             facebookDetails.put("role", facebookLoginDTO.role());
             facebookDetails.put("name", payload.get("name"));
             facebookDetails.put("facebookId", payload.get("id"));
-
-            return  facebookLogin(facebookDetails);
-        }catch (Exception e){
+            if (pictureData != null) facebookDetails.put("picture", pictureData.get("data").get("url"));
+            return facebookLogin(facebookDetails);
+        } catch (Exception e) {
             e.printStackTrace();
             throw new BadCredentialsException("Invalid Token");
         }
-}
+    }
 
-    private LoginResponseDTO facebookLogin(Map<String, Object>facebookDetails) {
+    private LoginResponseDTO facebookLogin(Map<String, Object> facebookDetails) {
         try {
             String email = (String) facebookDetails.get("email");
             User user = userService.findUserByEmail(email);
@@ -104,9 +106,10 @@ public   LoginResponseDTO handleFacebookLoginToken(FacebookLoginDTO facebookLogi
                     (String) facebookDetails.get("name"),
                     (String) facebookDetails.get("facebookId"),
                     true,
-                    (String) facebookDetails.get("role")
+                    (String) facebookDetails.get("role"),
+                    facebookDetails.get("picture") != null ? (String) facebookDetails.get("picture") : null
             );
-            User newUser = userService.createUser(createUserDto, Constants.RegistrationType.FACEBOOK);
+            User newUser = userService.createUserOauth(createUserDto, Constants.RegistrationType.FACEBOOK);
             return loginUser(newUser);
         }
     }

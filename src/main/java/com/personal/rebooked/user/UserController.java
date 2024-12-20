@@ -1,5 +1,6 @@
 package com.personal.rebooked.user;
 
+import com.personal.rebooked.user.dto.UpdateProfileDTO;
 import com.personal.rebooked.user.dto.UpdateUserDTO;
 import com.personal.rebooked.user.models.User;
 import com.personal.rebooked.utils.ResponseHandler;
@@ -15,7 +16,6 @@ import java.util.List;
 @RestController
 @RequestMapping("/user")
 public class UserController {
-
     private final UserService userService;
 
     @GetMapping("/me")
@@ -41,6 +41,12 @@ public class UserController {
     ResponseEntity<Object> updateUser(@PathVariable String id, @RequestBody UpdateUserDTO updateUserDTO){
         User user = userService.updateUser(id, updateUserDTO);
         return ResponseHandler.generateResponse( user, "User Updated successfully");
+    }
+
+    @PatchMapping("/{id}/profile")
+    ResponseEntity<Object> updateProfile(@PathVariable String id, @RequestBody UpdateProfileDTO updateProfileDTO){
+        User user = userService.updateUserProfile(id, updateProfileDTO);
+        return ResponseHandler.generateResponse( user, "User Profile Updated successfully");
     }
 
     @DeleteMapping("/{id}")
