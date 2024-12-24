@@ -1,5 +1,8 @@
 package com.personal.rebooked.seed;
 
+import com.personal.rebooked.category.CategoryService;
+import com.personal.rebooked.category.dto.CreateCategoryDTO;
+import com.personal.rebooked.category.models.Category;
 import com.personal.rebooked.user.UserService;
 import com.personal.rebooked.user.dto.CreateUserDto;
 import com.personal.rebooked.user.models.User;
@@ -23,12 +26,15 @@ public class Seeder implements ApplicationRunner {
 
     private final UserService userService;
 
+    private final CategoryService categoryService;
+
     private final Logger logger  = Logger.getLogger(Seeder.class.getName());
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
         seedRoles();
         seedSuperAdmin();
+        seedCategories();
     }
 
     private void seedRoles() {
@@ -38,6 +44,7 @@ public class Seeder implements ApplicationRunner {
                 Role role = roleService.getRoleByName(createRoleDTO.name());
             }catch (Exception e) {
                 Role role = roleService.createRole(createRoleDTO);
+                logger.info(String.format("Role %s created", role.getName()));
             }
         }
     }
@@ -50,5 +57,17 @@ public class Seeder implements ApplicationRunner {
             logger.info(String.format("Super admin %s created", user.getFullName()));
         }
 
+    }
+
+    private  void seedCategories() {
+        List<CreateCategoryDTO> categoryDTOList= Constants.categoryList;
+        for (CreateCategoryDTO createCategoryDTO : categoryDTOList) {
+            try{
+                Category category = categoryService.findByName(createCategoryDTO.name());
+            }catch (Exception e) {
+                Category category = categoryService.create(createCategoryDTO);
+                logger.info(String.format("Category %s created", category.getName()));
+            }
+        }
     }
 }

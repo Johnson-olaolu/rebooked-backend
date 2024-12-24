@@ -2,6 +2,8 @@ package com.personal.rebooked.utils;
 
 import java.security.SecureRandom;
 import java.text.DecimalFormat;
+import java.util.Calendar;
+import java.util.Date;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -41,5 +43,31 @@ public class Misc {
             return df.format(size / sizeGb) + " Gb";
 
         return "";
+    }
+
+    public static Date calculateStartDate(Constants.TimeQuery timeQuery) {
+        Calendar calendar = Calendar.getInstance();
+
+        switch (timeQuery) {
+            case LAST_WEEK:
+                calendar.add(Calendar.WEEK_OF_YEAR, -1);
+                break;
+            case LAST_TWO_WEEKS:
+                calendar.add(Calendar.WEEK_OF_YEAR, -2);
+                break;
+            case LAST_MONTH:
+                calendar.add(Calendar.MONTH, -1);
+                break;
+            case LAST_SIX_MONTHS:
+                calendar.add(Calendar.MONTH, -6);
+                break;
+            case LAST_YEAR:
+                calendar.add(Calendar.YEAR, -1);
+                break;
+            default:
+                throw new IllegalArgumentException("Invalid time range: " + timeQuery);
+        }
+
+        return calendar.getTime();
     }
 }

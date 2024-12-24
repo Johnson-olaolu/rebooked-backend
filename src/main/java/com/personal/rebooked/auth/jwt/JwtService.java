@@ -15,9 +15,14 @@ import java.util.HashMap;
 import java.util.Map;
 import java.util.function.Function;
 
-@Getter
+
 @Service
 public class JwtService {
+
+
+    public long getJwtExpiration() {
+        return jwtExpiration;
+    }
 
     @Value("${security.jwt.secret-key}")
     private String secretKey;

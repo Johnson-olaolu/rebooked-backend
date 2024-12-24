@@ -9,9 +9,14 @@ public record CreateUserDto(
         @NotBlank String fullName,
         @NotBlank  @Pattern(regexp = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=])(?=\\S+$).{8,}$") String password,
         @NotBlank boolean isVerified,
-        String role,
+        String roleName,
         String profilePictureUrl
 ) {
+    public CreateUserDto {
+        if (roleName == null || roleName.isEmpty()) {
+            roleName = "user";
+        }
+    }
     public  CreateUserDto ( String email, String fullName, String password) {
         this (email, fullName, password, false, "user", null);
     }

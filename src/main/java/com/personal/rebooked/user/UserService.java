@@ -34,8 +34,7 @@ public class UserService {
     private  final ProfileRepository profileRepository;
 
     public User createUser(CreateUserDto createUserDto) {
-        String roleName = createUserDto.role() != null ? createUserDto.role() : "user";
-        Role role = roleService.getRoleByName(roleName);
+        Role role = roleService.getRoleByName(createUserDto.roleName());
         User user = new User();
         user.setFullName(createUserDto.fullName());
         user.setPassword(createUserDto.password());
@@ -52,8 +51,7 @@ public class UserService {
     }
 
     public User createUserOauth(CreateUserDto createUserDto , Constants.RegistrationType registrationType) {
-        String roleName = createUserDto.role() != null ? createUserDto.role() : "user";
-        Role role = roleService.getRoleByName(roleName);
+        Role role = roleService.getRoleByName(createUserDto.roleName());
         User user = new User();
         user.setFullName(createUserDto.fullName());
         user.setPassword(createUserDto.password());
@@ -187,7 +185,6 @@ public class UserService {
        user.setOnboarded(true);
         return userRepository.save(user);
     }
-
 
     public  void deleteUser(String userId) {
         User user = findUserById(userId);
