@@ -16,7 +16,7 @@ public record QueryBookDTO
                 if(categoryIds == null || categoryIds.isEmpty()) {
                         categoryIds = Collections.emptyList();
                 }
-                if (page < 0) {
+                if (page < 0 ) {
                         page = 0; // Default page number
                 }
                 if (pageSize <= 0) {

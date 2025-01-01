@@ -37,16 +37,16 @@ public class BookController {
         return ResponseHandler.generateResponse(books, "Books fetched successfully");
     }
 
-    @GetMapping("/{id}")
-    public ResponseEntity<Object> getBookById(@PathVariable String id) {
-        Book book = bookService.findById(id);
-        return ResponseHandler.generateResponse(book, "Book fetched successfully");
-    }
-
     @GetMapping("/query")
     public ResponseEntity<Object> queryBooks(@ModelAttribute @Valid QueryBookDTO queryBookDTO) {
         Page<Book> books = bookService.query(queryBookDTO);
         return ResponseHandler.generateResponse(books, "Books fetched successfully");
+    }
+
+    @GetMapping("/{id}")
+    public ResponseEntity<Object> getBookById(@PathVariable String id) {
+        Book book = bookService.findById(id);
+        return ResponseHandler.generateResponse(book, "Book fetched successfully");
     }
 
     @GetMapping("/sold")
