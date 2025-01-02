@@ -10,6 +10,7 @@ public class Constants {
 
    public static List< CreateRoleDTO> userRoleList = List.of(
             new CreateRoleDTO("user", "USER"),
+            new CreateRoleDTO("seller", "SELLER"),
             new CreateRoleDTO("admin", "ADMIN"),
             new CreateRoleDTO("superAdmin", "SUPER ADMIN")
     );

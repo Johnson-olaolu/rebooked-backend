@@ -131,74 +131,6 @@ public class BookService {
         return bookRepository.save(book);
     }
 
-//    public Page<Book> query(QueryBookDTO queryBookDTO) {
-//
-//
-//        List<AggregationOperation> operations = new ArrayList<>();
-//
-//        // 1. Lookup to join with categories
-//        operations.add(LookupOperation.newLookup()
-//                .from("category")
-//                .localField("categories")
-//                .foreignField("_id")
-//                .as("categoryDetails"));
-//
-//        operations.add(Aggregation.unwind("categoryDetails"));
-//
-//        // Create criteria builder
-//        Criteria criteria = new Criteria();
-//        List<Criteria> orCriteria = new ArrayList<>();
-//
-//        // 1. Handle userId filter
-//        if (queryBookDTO.userId() != null && !queryBookDTO.userId().isEmpty()) {
-//            criteria.and("user.$id").is(new ObjectId(queryBookDTO.userId()));
-//        }
-//
-//        // 2. Handle search across multiple fields
-//        if (queryBookDTO.search() != null && !queryBookDTO.search().trim().isEmpty()) {
-//            String searchRegex = ".*" + Pattern.quote(queryBookDTO.search().trim()) + ".*";
-//            Pattern pattern = Pattern.compile(searchRegex, Pattern.CASE_INSENSITIVE);
-//
-//            // Search in title
-//            orCriteria.add(Criteria.where("title").regex(pattern));
-//
-//            // Search in author
-//            orCriteria.add(Criteria.where("author").regex(pattern));
-//
-//            // Search in category names
-////            orCriteria.add(Criteria.where("categories").elemMatch(
-////                    Criteria.where("name").regex(pattern)
-////            ));
-//            orCriteria.add(Criteria.where('categoryDetails.name').regex(pattern))
-//
-//            if (!orCriteria.isEmpty()) {
-//                criteria.orOperator(orCriteria.toArray(new Criteria[0]));
-//            }
-//        }
-//
-//        // 3. Handle category filter
-//        if (!queryBookDTO.categoryIds().isEmpty()) {
-//            List<ObjectId> categoryObjectIds = queryBookDTO.categoryIds().stream()
-//                    .map(ObjectId::new)
-//                    .collect(Collectors.toList());
-//
-//            criteria.and("categories.$id").in(categoryObjectIds);
-//        }
-//
-//        // 4. Create query with criteria
-//        Query query = Query.query(criteria);
-//
-//        // Add pagination
-//        Pageable pageable = PageRequest.of(queryBookDTO.page(), queryBookDTO.pageSize());
-//        long total = mongoTemplate.count(query, Book.class);
-//        query.with(pageable); // Apply pagination and sorting
-//
-//        // Execute and return paginated results
-//        List<Book> books = mongoTemplate.find(query, Book.class);
-//        return new PageImpl<>(books, pageable, total);
-//    }
-
-
     public Page<Book> query(QueryBookDTO queryDTO) {
 
         List<AggregationOperation> operations = new ArrayList<>();
@@ -268,6 +200,11 @@ public class BookService {
 
     public Book updateStatus(String id, UpdateBookStatusDTO updateBookStatusDTO) {
         Book book = findById(id);
+        if(updateBookStatusDTO.status() == Constants.BookStatus.SOLD) {
+            book.setSoldDate(new Date());
+        }else{
+            book.setSoldDate(null);
+        }
         book.setStatus(updateBookStatusDTO.status());
         return bookRepository.save(book);
     }
@@ -275,6 +212,7 @@ public class BookService {
     public List<Book> getSoldBooks(QuerySoldBooksDTO querySoldBooksDTO) {
         Date startDate = Misc.calculateStartDate(querySoldBooksDTO.timeQuery());
         Date endDate = new Date();
+
         return bookRepository.findBySoldDateBetween(querySoldBooksDTO.userId(), startDate, endDate, Constants.BookStatus.SOLD);
     }
 
