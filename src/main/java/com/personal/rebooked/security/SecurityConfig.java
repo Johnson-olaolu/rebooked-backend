@@ -50,7 +50,7 @@ public class SecurityConfig {
                     authorizeRequests
                             .requestMatchers("/auth/**").permitAll()
                             .requestMatchers("/documentation").permitAll()
-                            .requestMatchers("/swagger-ui/*").permitAll()
+                            .requestMatchers("/swagger-ui/**").permitAll()
                             .anyRequest().authenticated();
                 })
                 .sessionManagement(sess -> sess.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
