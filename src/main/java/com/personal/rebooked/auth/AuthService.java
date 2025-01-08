@@ -68,8 +68,8 @@ public class AuthService {
                     (String) googleDetails.get("email"),
                     (String) googleDetails.get("name"),
                     (String) googleDetails.get("googleId"),
-                    true,
                     (String) googleDetails.get("roleName"),
+                    true,
                     googleDetails.get("picture") != null ? (String) googleDetails.get("picture") : null
             );
 //            System.out.println(createUserDto);
@@ -105,8 +105,8 @@ public class AuthService {
                     (String) facebookDetails.get("email"),
                     (String) facebookDetails.get("name"),
                     (String) facebookDetails.get("facebookId"),
-                    true,
                     (String) facebookDetails.get("roleName"),
+                    true,
                     facebookDetails.get("picture") != null ? (String) facebookDetails.get("picture") : null
             );
             User newUser = userService.createUserOauth(createUserDto, Constants.RegistrationType.FACEBOOK);

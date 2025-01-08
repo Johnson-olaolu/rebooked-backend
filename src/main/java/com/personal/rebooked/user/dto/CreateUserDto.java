@@ -1,15 +1,15 @@
 package com.personal.rebooked.user.dto;
 
 import jakarta.validation.constraints.Email;
-import jakarta.validation.constraints.NotBlank;
+import jakarta.validation.constraints.NotNull;
 import jakarta.validation.constraints.Pattern;
 
 public record CreateUserDto(
-        @Email @NotBlank String email,
-        @NotBlank String fullName,
-        @NotBlank  @Pattern(regexp = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[@#$%^&+=])(?=\\S+$).{8,}$") String password,
-        @NotBlank boolean isVerified,
+        @Email @NotNull String email,
+        @NotNull String fullName,
+        @NotNull @Pattern(regexp = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[_@#$%^&+=])(?=\\S+$).{8,}$") String password,
         String roleName,
+        boolean isVerified,
         String profilePictureUrl
 ) {
     public CreateUserDto {
@@ -18,6 +18,6 @@ public record CreateUserDto(
         }
     }
     public  CreateUserDto ( String email, String fullName, String password) {
-        this (email, fullName, password, false, "user", null);
+        this (email, fullName, password, "user", false, null);
     }
 }

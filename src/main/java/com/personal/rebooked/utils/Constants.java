@@ -19,8 +19,8 @@ public class Constants {
            "super_admin@rebooked.com",
            "Super Admin",
            "Admin_123",
-           true,
            "superAdmin",
+           true,
            null
     );
 
