@@ -87,4 +87,8 @@ public class Constants {
        LAST_YEAR
    }
 
+   public enum ChatType {
+       BiLL,
+       MESSAGE
+   }
 }

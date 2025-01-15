@@ -4,6 +4,7 @@ import java.security.SecureRandom;
 import java.text.DecimalFormat;
 import java.util.Calendar;
 import java.util.Date;
+import java.util.UUID;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -69,5 +70,10 @@ public class Misc {
         }
 
         return calendar.getTime();
+    }
+
+    public  static String generateUUID () {
+        UUID uuid = UUID.randomUUID();
+        return uuid.toString();
     }
 }
