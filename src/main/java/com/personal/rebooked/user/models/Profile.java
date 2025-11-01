@@ -30,7 +30,6 @@ public class Profile {
 
     private String profilePictureUrl;
 
-    @DBRef
     private Address address;
 
     @CreatedDate

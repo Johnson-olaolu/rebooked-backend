@@ -155,7 +155,8 @@ public class UserService {
         Address address = new Address();
         address.setCountry(updateProfileDTO.address().getCountry());
         address.setState(updateProfileDTO.address().getState());
-        Address savedAddress = addressRepository.save(address);
+        address.setCity(updateProfileDTO.address().getCity());
+        address.setAddressLine(updateProfileDTO.address().getAddressLine());
         for (Field dtoField : dtoFields) {
             dtoField.setAccessible(true);
             try {
@@ -183,7 +184,7 @@ public class UserService {
                 throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage());
             }
         }
-        profile.setAddress(savedAddress);
+        profile.setAddress(address);
         Profile updatedprofile = profileRepository.save(profile);
         System.out.println(updatedprofile);
         user.setProfile(updatedprofile);

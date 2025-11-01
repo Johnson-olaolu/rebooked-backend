@@ -64,7 +64,7 @@ public class AuthController {
 
     @GetMapping("/forgot-password")
     public ResponseEntity<Object> sendForgotPasswordMail( @ModelAttribute @Valid ForgotPasswordDTO forgotPasswordDTO) {
-        User user = authService.sendForgotPasswordMail( forgotPasswordDTO);
+        User user = authService.sendForgotPasswordMail(forgotPasswordDTO);
         return ResponseHandler.generateResponse(user, "Email sent successfully");
     }
 

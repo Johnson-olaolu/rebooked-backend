@@ -12,20 +12,10 @@ import java.time.LocalDateTime;
 import java.util.Date;
 
 @Data
-@Document
 public class Address {
-    @Id
-    private String id;
     private String state;
     private String country;
+    private String city;
+    private String addressLine;
     // private String formattedAddress;
-
-    // @GeoSpatialIndexed
-    // private Point location;
-
-    @CreatedDate
-    private Date createdAt;
-
-    @LastModifiedDate
-    private Date updatedAt;
 }

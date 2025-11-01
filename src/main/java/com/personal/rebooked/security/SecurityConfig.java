@@ -50,6 +50,7 @@ public class SecurityConfig {
                     authorizeRequests
                             .requestMatchers("/").permitAll()
                             .requestMatchers("/auth/**").permitAll()
+                            .requestMatchers("/user/**").permitAll()
                             .requestMatchers("/marketing/**").permitAll()
                             .requestMatchers("/book/*/view").permitAll()
                             .requestMatchers("/book/ai-picks").permitAll()
