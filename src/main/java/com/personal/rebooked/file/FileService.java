@@ -7,7 +7,14 @@ import com.personal.rebooked.user.models.User;
 import com.personal.rebooked.utils.Misc;
 import com.personal.rebooked.utils.Constants;
 import com.personal.rebooked.exception.ApiException;
+import com.personal.rebooked.book.models.Book;
+import com.personal.rebooked.user.models.Profile;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.bson.Document;
+import org.bson.types.ObjectId;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.BasicQuery;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.multipart.MultipartFile;
@@ -16,12 +23,14 @@ import org.springframework.web.server.ResponseStatusException;
 import java.util.List;
 import java.util.Map;
 
+@Slf4j
 @RequiredArgsConstructor
 @Service
 public class FileService {
 
     private final FileRepository fileRepository;
     private final CloudinaryService cloudinaryService;
+    private final MongoTemplate mongoTemplate;
 
 
     public File upload(MultipartFile file, User user) {
@@ -42,6 +51,28 @@ public class FileService {
 
     public List<File> getUserFiles(String userId) {
         return fileRepository.findFilesByUserId(userId);
+    }
+
+    /**
+     * Best effort clean-up: deletes the file (and its Cloudinary asset) only if ownerId uploaded it and no book
+     * or profile still points to it. Never throws.
+     */
+    public void deleteIfUnused(File file, String ownerId) {
+        if (file == null) return;
+        try {
+            if (!isOwnedBy(file, ownerId)) return;
+            Object fileId = ObjectId.isValid(file.getId()) ? new ObjectId(file.getId()) : file.getId();
+            boolean usedByBook = mongoTemplate.exists(new BasicQuery(new Document("$or", List.of(
+                    new Document("coverImage.$id", fileId),
+                    new Document("images.$id", fileId)))), Book.class);
+            if (usedByBook) return;
+            boolean usedByProfile = mongoTemplate.exists(
+                    new BasicQuery(new Document("profilePicture.$id", fileId)), Profile.class);
+            if (usedByProfile) return;
+            deleteFile(file.getId());
+        } catch (Exception e) {
+            log.warn("Could not delete unused file {}", file.getId(), e);
+        }
     }
 
     /** True if the file was uploaded by the given user. */

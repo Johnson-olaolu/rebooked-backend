@@ -12,6 +12,9 @@ import lombok.Data;
 import org.springframework.data.annotation.CreatedDate;
 import org.springframework.data.annotation.Id;
 import org.springframework.data.annotation.LastModifiedDate;
+import org.springframework.data.mongodb.core.index.CompoundIndex;
+import org.springframework.data.mongodb.core.index.CompoundIndexes;
+import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
 
@@ -20,6 +23,10 @@ import java.util.List;
 
 @Data
 @Document
+@CompoundIndexes({
+        @CompoundIndex(name = "status_state_created", def = "{'status': 1, 'location.state': 1, 'createdAt': -1}"),
+        @CompoundIndex(name = "status_price", def = "{'status': 1, 'price': 1}")
+})
 public class Book {
     @Id
     private String id;
@@ -31,6 +38,13 @@ public class Book {
 
     @NotBlank
     private String title;
+
+    /** URL slug, e.g. half-of-a-yellow-sun-4821. Fixed once the book is published. */
+    @Indexed(unique = true, sparse = true)
+    private String slug;
+
+    /** The seller's state and city, kept in sync with their profile address. */
+    private BookLocation location;
 
     private String author;
 

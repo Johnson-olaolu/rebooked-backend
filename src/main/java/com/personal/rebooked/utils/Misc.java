@@ -142,4 +142,16 @@ public class Misc {
         String s = input.replaceAll("[\\s-]", "").toUpperCase(java.util.Locale.ROOT);
         return s.matches("^\\d{9}[\\dX]$") || s.matches("^\\d{13}$") ? s : null;
     }
+
+    /** "Half of a Yellow Sun!" -> "half-of-a-yellow-sun" (ASCII only, at most 60 characters). */
+    public static String slugify(String input) {
+        if (input == null) return "book";
+        String s = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFD)
+                .replaceAll("\\p{M}", "")
+                .toLowerCase(java.util.Locale.ROOT)
+                .replaceAll("[^a-z0-9]+", "-")
+                .replaceAll("^-+|-+$", "");
+        if (s.length() > 60) s = s.substring(0, 60).replaceAll("-+$", "");
+        return s.isEmpty() ? "book" : s;
+    }
 }

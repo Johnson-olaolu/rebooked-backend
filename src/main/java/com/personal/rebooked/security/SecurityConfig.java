@@ -76,7 +76,7 @@ public class SecurityConfig {
                             // Shop browsing is public; the literal routes above/below stay as configured
                             .requestMatchers(HttpMethod.GET, "/book/query").permitAll()
                             .requestMatchers(HttpMethod.GET, "/book/sold").authenticated()
-                            .requestMatchers(HttpMethod.GET, "/book/*").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/book/*", "/book/slug/*").permitAll()
                             .requestMatchers("/documentation").permitAll()
                             .requestMatchers("/swagger-ui/**").permitAll()
                             .requestMatchers("/v3/api-docs/**").permitAll()

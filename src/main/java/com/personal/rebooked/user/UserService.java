@@ -1,5 +1,15 @@
 package com.personal.rebooked.user;
 
+import org.springframework.data.mongodb.core.query.Criteria;
+
+import org.springframework.data.mongodb.core.query.Query;
+
+import com.personal.rebooked.user.dto.PublicUserDTO;
+
+import com.personal.rebooked.book.models.BookLocation;
+import org.springframework.data.mongodb.core.query.Update;
+import java.util.Objects;
+
 import com.personal.rebooked.exception.ApiException;
 import com.personal.rebooked.file.FileService;
 import com.personal.rebooked.file.models.File;
@@ -141,6 +151,16 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    /** Seller page: the public summary plus available (ACTIVE) and sold book counts. */
+    public PublicUserDTO publicProfile(User user) {
+        ObjectId id = new ObjectId(user.getId());
+        long available = mongoTemplate.count(new Query(Criteria.where("user.$id").is(id)
+                .and("status").is(Constants.BookStatus.ACTIVE)), Book.class);
+        long sold = mongoTemplate.count(new Query(Criteria.where("user.$id").is(id)
+                .and("status").is(Constants.BookStatus.SOLD)), Book.class);
+        return PublicUserDTO.from(user).withCounts(available, sold);
+    }
+
     public User updateUserProfile(String userId, UpdateProfileDTO dto) {
         User user = findUserById(userId);
         Profile profile = user.getProfile() != null ? user.getProfile() : new Profile();
@@ -166,6 +186,8 @@ public class UserService {
         }
 
         File previousPicture = profile.getProfilePicture();
+        String previousState = profile.getAddress() == null ? null : profile.getAddress().getState();
+        String previousCity = profile.getAddress() == null ? null : profile.getAddress().getCity();
         if (dto.profilePictureId() != null) {
             if (dto.profilePictureId().isBlank()) {
                 // "" removes the photo
@@ -209,31 +231,27 @@ public class UserService {
 
         // 3. Only the server marks onboarding as complete
         profile.setOnboardingCompleted(true);
+        boolean locationChanged = !Objects.equals(previousState, profile.getAddress() == null ? null : profile.getAddress().getState())
+                || !Objects.equals(previousCity, profile.getAddress() == null ? null : profile.getAddress().getCity());
         user.setProfile(profileRepository.save(profile));
         User saved = userRepository.save(user);
+
+        // Books carry a copy of the seller's location for shop filtering
+        if (locationChanged) {
+            Address a = profile.getAddress();
+            mongoTemplate.updateMulti(
+                    new BasicQuery(new org.bson.Document("user.$id", new ObjectId(userId))),
+                    new Update().set("location", a == null ? null : new BookLocation(a.getState(), a.getCity())),
+                    Book.class);
+        }
 
         // 4. Clean up a replaced or removed photo once the new profile is saved
         File currentPicture = profile.getProfilePicture();
         if (previousPicture != null
                 && (currentPicture == null || !previousPicture.getId().equals(currentPicture.getId()))) {
-            deleteOldProfilePicture(previousPicture, userId);
+            fileService.deleteIfUnused(previousPicture, userId);
         }
         return saved;
-    }
-
-    /** Best effort: never fails the request, and never deletes a file someone else owns or a book still uses. */
-    private void deleteOldProfilePicture(File file, String userId) {
-        try {
-            if (!FileService.isOwnedBy(file, userId)) return;
-            Object fileId = ObjectId.isValid(file.getId()) ? new ObjectId(file.getId()) : file.getId();
-            boolean usedByBook = mongoTemplate.exists(new BasicQuery(new org.bson.Document("$or", List.of(
-                    new org.bson.Document("coverImage.$id", fileId),
-                    new org.bson.Document("images.$id", fileId)))), Book.class);
-            if (usedByBook) return;
-            fileService.deleteFile(file.getId());
-        } catch (Exception e) {
-            log.warn("Could not delete replaced profile picture {}", file.getId(), e);
-        }
     }
 
     private void mergeAddress(Address address, AddressDTO incoming, Map<String, String> errors) {

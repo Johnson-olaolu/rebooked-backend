@@ -53,7 +53,7 @@ public class UserController {
             return ResponseHandler.generateResponse(user, "User fetched successfully");
         }
         // Everyone else gets the public summary: no email, phone or precise address
-        return ResponseHandler.generateResponse(PublicUserDTO.from(user), "User fetched successfully");
+        return ResponseHandler.generateResponse(userService.publicProfile(user), "User fetched successfully");
     }
 
     @ApiResponses({

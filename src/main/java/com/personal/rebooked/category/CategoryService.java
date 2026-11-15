@@ -24,6 +24,9 @@ import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
 import java.util.Comparator;
+import java.util.HashMap;
+import java.util.Map;
+import com.personal.rebooked.utils.Constants;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -34,7 +37,27 @@ public class CategoryService {
     private final org.springframework.data.mongodb.core.MongoTemplate mongoTemplate;
 
     public List<Category> findAll() {
-        return categoryRepository.findAll();
+        List<Category> categories = categoryRepository.findAll();
+        Map<String, Long> counts = countActiveBooksByCategory();
+        categories.forEach(c -> c.setBooksCount(counts.getOrDefault(c.getId(), 0L).intValue()));
+        return categories;
+    }
+
+    /** ACTIVE books per category id, in one aggregation over the book collection. */
+    public Map<String, Long> countActiveBooksByCategory() {
+        Aggregation aggregation = Aggregation.newAggregation(
+                Aggregation.match(Criteria.where("status").is(Constants.BookStatus.ACTIVE)),
+                Aggregation.unwind("categories"),
+                // DBRef ids can't be referenced as "$categories.$id" in expressions; read them via $objectToArray
+                ctx -> new Document("$project", new Document("cid", new Document("$arrayElemAt", List.of(
+                        new Document("$map", new Document("input", new Document("$objectToArray", "$categories"))
+                                .append("in", "$$this.v")), 1)))),
+                ctx -> new Document("$group", new Document("_id", "$cid").append("n", new Document("$sum", 1))));
+        Map<String, Long> counts = new HashMap<>();
+        for (Document row : mongoTemplate.aggregate(aggregation, "book", Document.class).getMappedResults()) {
+            if (row.get("_id") != null) counts.put(row.get("_id").toString(), ((Number) row.get("n")).longValue());
+        }
+        return counts;
     }
 
     public Category findById(String id) {
@@ -94,14 +117,9 @@ public class CategoryService {
     }
 
     public List<Category> fetchTopCategories(int limit) {
-        // Books reference categories via @DBRef, stored as { $ref: 'category', $id: ObjectId }.
-        // Counting with a find query on "categories.$id" is simpler and more reliable than an aggregation over DBRefs.
         List<Category> categories = categoryRepository.findByIsSeededTrue();
-        for (Category category : categories) {
-            Object id = ObjectId.isValid(category.getId()) ? new ObjectId(category.getId()) : category.getId();
-            long count = mongoTemplate.count(new BasicQuery(new Document("categories.$id", id)), Book.class);
-            category.setBooksCount((int) count);
-        }
+        Map<String, Long> counts = countActiveBooksByCategory();
+        categories.forEach(c -> c.setBooksCount(counts.getOrDefault(c.getId(), 0L).intValue()));
         return categories.stream()
                 .sorted(Comparator.comparing(Category::getBooksCount).reversed())
                 .limit(limit)

@@ -2,7 +2,11 @@ package com.personal.rebooked.seed;
 
 import com.personal.rebooked.book.BookService;
 import com.personal.rebooked.book.dto.CreateBookDto;
+import com.personal.rebooked.book.models.Book;
+import com.personal.rebooked.book.models.BookLocation;
 import com.personal.rebooked.book.models.Tag;
+import org.bson.types.ObjectId;
+import org.springframework.data.mongodb.core.query.BasicQuery;
 import com.personal.rebooked.book.repositories.TagRepository;
 import com.personal.rebooked.category.CategoryService;
 import com.personal.rebooked.category.dto.CreateCategoryDTO;
@@ -63,6 +67,8 @@ public class Seeder implements ApplicationRunner {
         migrateAddresses();
         migrateOnboardingFlag();
         expireLegacyEmailCodes();
+        migrateBookLocations();
+        migrateBookSlugs();
 //        seedBooks();
     }
 
@@ -128,6 +134,36 @@ public class Seeder implements ApplicationRunner {
                 new Update().unset("confirmEmailToken").unset("confirmEmailTokenTTL"), User.class);
         mongoTemplate.updateMulti(new Query(Criteria.where("changePasswordTokenTTL").gt(maxValid)),
                 new Update().unset("changePasswordToken").unset("changePasswordTokenTTL"), User.class);
+    }
+
+    /** Copy each seller's state/city onto their books (17a). Idempotent: only books without a location. */
+    private void migrateBookLocations() {
+        MongoCollection<Document> books = mongoTemplate.getCollection("book");
+        Document missing = new Document("location", new Document("$exists", false));
+        List<ObjectId> sellerIds = books.distinct("user.$id", missing, ObjectId.class).into(new ArrayList<>());
+        int updated = 0;
+        for (ObjectId sellerId : sellerIds) {
+            User seller = mongoTemplate.findById(sellerId.toHexString(), User.class);
+            BookLocation location = BookService.locationOf(seller);
+            if (location == null) continue;
+            updated += (int) mongoTemplate.updateMulti(
+                    new BasicQuery(new Document("user.$id", sellerId).append("location", new Document("$exists", false))),
+                    new Update().set("location", location), Book.class).getModifiedCount();
+        }
+        if (updated > 0) logger.info("Backfilled location on " + updated + " books");
+    }
+
+    /** Give every book a URL slug (16b). Idempotent: only books without one. */
+    private void migrateBookSlugs() {
+        MongoCollection<Document> books = mongoTemplate.getCollection("book");
+        int updated = 0;
+        for (Document book : books.find(new Document("slug", new Document("$exists", false)))
+                .projection(Projections.include("title"))) {
+            String slug = bookService.uniqueSlug(book.getString("title"));
+            books.updateOne(Filters.eq("_id", book.get("_id")), Updates.set("slug", slug));
+            updated++;
+        }
+        if (updated > 0) logger.info("Backfilled slug on " + updated + " books");
     }
 
     private void seedCategories() {

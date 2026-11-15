@@ -51,7 +51,7 @@ public class BookController {
 
     @GetMapping("/query")
     public ResponseEntity<Object> queryBooks(@ParameterObject @ModelAttribute @Valid QueryBookDTO queryBookDTO) {
-        PageResponse<Book> books = bookService.query(queryBookDTO);
+        BookQueryResponse books = bookService.query(queryBookDTO);
         return ResponseHandler.generateResponse(books, "Books fetched successfully");
     }
 
@@ -71,6 +71,13 @@ public class BookController {
     public ResponseEntity<Object> getMostViewedBooks() {
         List<Book> mostViewedBooks = bookService.getTopBooks();
         return ResponseHandler.generateResponse(mostViewedBooks, "Most viewed books fetched successfully");
+    }
+
+    /** Public book page by slug; drafts only for their owner. */
+    @GetMapping("/slug/{slug}")
+    public ResponseEntity<Object> getBookBySlug(@PathVariable String slug) {
+        Book book = bookService.findVisibleBySlug(slug, CurrentUser.optional().orElse(null));
+        return ResponseHandler.generateResponse(book, "Book fetched successfully");
     }
 
     @GetMapping("/{id}")

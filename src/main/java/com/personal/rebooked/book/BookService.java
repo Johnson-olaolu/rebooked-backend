@@ -4,6 +4,7 @@ import com.fasterxml.jackson.databind.ObjectMapper;
 import com.google.gson.Gson;
 import com.personal.rebooked.book.dto.*;
 import com.personal.rebooked.book.models.Book;
+import com.personal.rebooked.book.models.BookLocation;
 import com.personal.rebooked.book.models.Tag;
 import com.personal.rebooked.book.repositories.BookRepository;
 import com.personal.rebooked.book.repositories.TagRepository;
@@ -31,6 +32,8 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.time.LocalDate;
+import java.time.ZoneId;
 import java.util.*;
 import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
@@ -47,6 +50,7 @@ public class BookService {
 
     private final BookRepository bookRepository;
     private final FileRepository fileRepository;
+    private final FileService fileService;
     private final CategoryRepository categoryRepository;
     private final TagRepository tagRepository;
     private final MongoTemplate mongoTemplate;
@@ -92,6 +96,8 @@ public class BookService {
         }
         throwIfErrors(errors);
         book.setTags(resolveTags(changes.tagNames()));
+        book.setLocation(locationOf(user));
+        book.setSlug(uniqueSlug(book.getTitle()));
         return bookRepository.save(book);
     }
 
@@ -99,6 +105,8 @@ public class BookService {
         Book book = findById(id);
         requireOwner(book, caller);
         Map<String, String> errors = new LinkedHashMap<>();
+        List<File> previousFiles = filesOf(book);
+        String previousTitle = book.getTitle();
 
         if (dto.title() != null) book.setTitle(dto.title().trim());
         BookChanges changes = new BookChanges(dto.author(), dto.price(), dto.isFree(), dto.condition(), dto.isbn(),
@@ -111,7 +119,20 @@ public class BookService {
         }
         throwIfErrors(errors);
         if (changes.tagNames() != null) book.setTags(resolveTags(changes.tagNames()));
-        return bookRepository.save(book);
+        book.setLocation(locationOf(book.getUser()));
+        // Published links stay stable; drafts follow their title
+        if (book.getSlug() == null || (book.getStatus() == Constants.BookStatus.DRAFT
+                && !Objects.equals(previousTitle, book.getTitle()))) {
+            book.setSlug(uniqueSlug(book.getTitle()));
+        }
+        Book saved = bookRepository.save(book);
+
+        Set<String> kept = new HashSet<>();
+        filesOf(saved).forEach(f -> kept.add(f.getId()));
+        for (File file : previousFiles) {
+            if (!kept.contains(file.getId())) fileService.deleteIfUnused(file, caller.getId());
+        }
+        return saved;
     }
 
     public Book updateStatus(User caller, String id, UpdateBookStatusDTO dto) {
@@ -139,6 +160,40 @@ public class BookService {
         Book book = findById(id);
         requireOwner(book, caller);
         bookRepository.delete(book);
+        // Photos no other book or profile uses go too
+        for (File file : filesOf(book)) fileService.deleteIfUnused(file, caller.getId());
+    }
+
+    /** The cover and images, without duplicates. */
+    private static List<File> filesOf(Book book) {
+        Map<String, File> files = new LinkedHashMap<>();
+        if (book.getImages() != null) book.getImages().forEach(f -> { if (f != null) files.put(f.getId(), f); });
+        if (book.getCoverImage() != null) files.putIfAbsent(book.getCoverImage().getId(), book.getCoverImage());
+        return new ArrayList<>(files.values());
+    }
+
+    public static BookLocation locationOf(User user) {
+        if (user == null || user.getProfile() == null || user.getProfile().getAddress() == null) return null;
+        var address = user.getProfile().getAddress();
+        if (address.getState() == null && address.getCity() == null) return null;
+        return new BookLocation(address.getState(), address.getCity());
+    }
+
+    /** slugify(title) + 4 random digits, retried on collision; 6 digits as a last resort. */
+    public String uniqueSlug(String title) {
+        String base = Misc.slugify(title);
+        Random random = new Random();
+        for (int i = 0; i < 5; i++) {
+            String slug = base + "-" + (1000 + random.nextInt(9000));
+            if (!bookRepository.existsBySlug(slug)) return slug;
+        }
+        return base + "-" + (100000 + random.nextInt(900000));
+    }
+
+    public Book findVisibleBySlug(String slug, User viewer) {
+        Book book = bookRepository.findBySlug(slug)
+                .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found"));
+        return findVisible(book.getId(), viewer);
     }
 
     /** Fields shared by create and PATCH. null = not sent. */
@@ -322,39 +377,117 @@ public class BookService {
         return new ShelfResponse(content, p, size, total, (int) Math.ceil((double) total / size), counts);
     }
 
-    /** Shop search: ACTIVE books only, newest first. */
-    public PageResponse<Book> query(QueryBookDTO queryDTO) {
-        Map<String, String> errors = new LinkedHashMap<>();
-        if (queryDTO.userId() != null && !queryDTO.userId().isBlank() && !isObjectId(queryDTO.userId())) {
-            errors.put("userId", "Invalid user id");
+    /** Filter groups for the shop query. Facets count each group with every other group applied, but not its own. */
+    private record Filters(List<Criteria> base, Map<String, Criteria> groups, boolean searching) {
+        Criteria all() {
+            return except(null);
         }
-        if (queryDTO.categoryIds().stream().anyMatch(id -> !isObjectId(id))) {
-            errors.put("categoryIds", "Invalid category id");
+
+        Criteria except(String group) {
+            List<Criteria> criteria = new ArrayList<>(base);
+            groups.forEach((name, c) -> {
+                if (!name.equals(group)) criteria.add(c);
+            });
+            return new Criteria().andOperator(criteria.toArray(new Criteria[0]));
+        }
+    }
+
+    private static final ZoneId SHOP_ZONE = ZoneId.of("Africa/Lagos");
+
+    /** Shop search (ACTIVE books) or a seller's sold books (status=SOLD with userId). */
+    public BookQueryResponse query(QueryBookDTO dto) {
+        Map<String, String> errors = new LinkedHashMap<>();
+
+        boolean hasUser = dto.userId() != null && !dto.userId().isBlank();
+        if (hasUser && !isObjectId(dto.userId())) errors.put("userId", "Invalid user id");
+        if (dto.categoryIds().stream().anyMatch(id -> !isObjectId(id))) errors.put("categoryIds", "Invalid category id");
+
+        Constants.BookStatus status = Constants.BookStatus.ACTIVE;
+        if (dto.status() != null && !dto.status().isBlank()) {
+            String s = dto.status().trim().toUpperCase(Locale.ROOT);
+            if (s.equals("ACTIVE") || s.equals("SOLD")) status = Constants.BookStatus.valueOf(s);
+            else errors.put("status", "Status must be ACTIVE or SOLD");
+        }
+        if (status == Constants.BookStatus.SOLD && !hasUser && !errors.containsKey("userId")) {
+            errors.put("userId", "userId is required to list sold books");
+        }
+
+        List<String> states = new ArrayList<>();
+        for (String raw : dto.states()) {
+            if (raw == null || raw.isBlank()) continue;
+            String state = Misc.normalizeNigerianState(raw);
+            if (state == null) {
+                errors.put("states", "Unknown state: " + raw.trim());
+                break;
+            }
+            states.add(state);
+        }
+
+        List<Constants.BookCondition> conditions = new ArrayList<>();
+        for (String raw : dto.conditions()) {
+            if (raw == null || raw.isBlank()) continue;
+            try {
+                conditions.add(Constants.BookCondition.valueOf(raw.trim().toUpperCase(Locale.ROOT)));
+            } catch (IllegalArgumentException e) {
+                errors.put("conditions", "Condition must be one of NEW, LIKE_NEW, GOOD, FAIR");
+                break;
+            }
+        }
+
+        if (dto.minPrice() != null && dto.minPrice() < 0) errors.put("minPrice", "Price can't be negative");
+        if (dto.maxPrice() != null && dto.maxPrice() < 0) errors.put("maxPrice", "Price can't be negative");
+        if (dto.minPrice() != null && dto.maxPrice() != null && dto.minPrice() > dto.maxPrice()
+                && !errors.containsKey("minPrice") && !errors.containsKey("maxPrice")) {
+            errors.put("minPrice", "Minimum price can't be more than the maximum");
+        }
+
+        String sort = dto.sort() == null || dto.sort().isBlank() ? "NEWEST" : dto.sort().trim().toUpperCase(Locale.ROOT);
+        if (!List.of("NEWEST", "PRICE_ASC", "PRICE_DESC").contains(sort)) {
+            errors.put("sort", "Sort must be NEWEST, PRICE_ASC or PRICE_DESC");
         }
         throwIfErrors(errors);
 
-        List<AggregationOperation> operations = new ArrayList<>();
-        List<Criteria> criteria = new ArrayList<>();
-        criteria.add(Criteria.where("status").is(Constants.BookStatus.ACTIVE));
+        // ---- base filters: status, seller, search
+        List<Criteria> base = new ArrayList<>();
+        base.add(Criteria.where("status").is(status));
+        if (hasUser) base.add(Criteria.where("user.$id").is(new ObjectId(dto.userId())));
 
-        if (queryDTO.userId() != null && !queryDTO.userId().isBlank()) {
-            criteria.add(Criteria.where("user.$id").is(new ObjectId(queryDTO.userId())));
-        }
-        if (!queryDTO.categoryIds().isEmpty()) {
-            criteria.add(Criteria.where("categories.$id").in(queryDTO.categoryIds().stream().map(ObjectId::new).toList()));
-        }
-
-        boolean searching = queryDTO.search() != null && !queryDTO.search().trim().isEmpty();
+        boolean searching = dto.search() != null && !dto.search().trim().isEmpty();
         if (searching) {
-            // Only needed to search category names
-            operations.add(lookup("category", "categories.$id", "_id", "categoryDetails"));
-            Pattern pattern = Pattern.compile(Pattern.quote(queryDTO.search().trim()), Pattern.CASE_INSENSITIVE);
-            criteria.add(new Criteria().orOperator(
+            String text = dto.search().trim();
+            Pattern pattern = Pattern.compile(Pattern.quote(text), Pattern.CASE_INSENSITIVE);
+            List<Criteria> search = new ArrayList<>(List.of(
                     Criteria.where("title").regex(pattern),
                     Criteria.where("author").regex(pattern),
                     Criteria.where("categoryDetails.name").regex(pattern)));
+            String isbnText = text.replaceAll("[\\s-]", "").toUpperCase(Locale.ROOT);
+            if (!isbnText.isEmpty() && isbnText.matches("[0-9X]+")) {
+                search.add(Criteria.where("isbn").regex(Pattern.compile(Pattern.quote(isbnText))));
+            }
+            base.add(new Criteria().orOperator(search.toArray(new Criteria[0])));
         }
-        operations.add(Aggregation.match(new Criteria().andOperator(criteria.toArray(new Criteria[0]))));
+
+        // ---- optional groups
+        Map<String, Criteria> groups = new LinkedHashMap<>();
+        if (!dto.categoryIds().isEmpty()) {
+            groups.put("categories", Criteria.where("categories.$id")
+                    .in(dto.categoryIds().stream().map(ObjectId::new).toList()));
+        }
+        if (!states.isEmpty()) groups.put("states", Criteria.where("location.state").in(states));
+        if (!conditions.isEmpty()) groups.put("conditions", Criteria.where("condition").in(conditions));
+        if (dto.minPrice() != null || dto.maxPrice() != null) {
+            Criteria price = Criteria.where("price");
+            if (dto.minPrice() != null) price = price.gte(dto.minPrice());
+            if (dto.maxPrice() != null) price = price.lte(dto.maxPrice());
+            groups.put("price", price);
+        }
+        if (Boolean.TRUE.equals(dto.free())) groups.put("free", Criteria.where("isFree").is(true));
+        Filters filters = new Filters(base, groups, searching);
+
+        // ---- page
+        List<AggregationOperation> operations = new ArrayList<>();
+        if (searching) operations.add(lookup("category", "categories.$id", "_id", "categoryDetails"));
+        operations.add(Aggregation.match(filters.all()));
 
         List<AggregationOperation> countOps = new ArrayList<>(operations);
         countOps.add(Aggregation.count().as("n"));
@@ -362,14 +495,94 @@ public class BookService {
                 .getUniqueMappedResult();
         long total = countRow == null ? 0 : ((Number) countRow.get("n")).longValue();
 
-        operations.add(Aggregation.sort(Sort.Direction.DESC, "createdAt"));
-        operations.add(Aggregation.skip((long) queryDTO.page() * queryDTO.pageSize()));
-        operations.add(Aggregation.limit(queryDTO.pageSize()));
+        Sort order;
+        if (status == Constants.BookStatus.SOLD) {
+            order = Sort.by(Sort.Order.desc("soldDate"), Sort.Order.desc("createdAt"));
+        } else if (sort.equals("PRICE_ASC")) {
+            order = Sort.by(Sort.Order.asc("price"), Sort.Order.desc("createdAt"));
+        } else if (sort.equals("PRICE_DESC")) {
+            order = Sort.by(Sort.Order.desc("price"), Sort.Order.desc("createdAt"));
+        } else {
+            order = Sort.by(Sort.Order.desc("createdAt"));
+        }
+        operations.add(Aggregation.sort(order));
+        operations.add(Aggregation.skip((long) dto.page() * dto.pageSize()));
+        operations.add(Aggregation.limit(dto.pageSize()));
         if (searching) operations.add(Aggregation.project().andExclude("categoryDetails"));
-
         List<Book> books = mongoTemplate.aggregate(Aggregation.newAggregation(operations), "book", Book.class)
                 .getMappedResults();
-        return PageResponse.of(books, queryDTO.page(), queryDTO.pageSize(), total);
+
+        int totalPages = (int) Math.ceil((double) total / dto.pageSize());
+        if (status != Constants.BookStatus.ACTIVE) {
+            return new BookQueryResponse(books, dto.page(), dto.pageSize(), total, totalPages, null, null);
+        }
+        FacetResult facets = facets(filters);
+        return new BookQueryResponse(books, dto.page(), dto.pageSize(), total, totalPages, facets.facets(), facets.addedToday());
+    }
+
+    private record FacetResult(BookQueryResponse.Facets facets, long addedToday) {
+    }
+
+    /** One $facet aggregation: each branch applies every filter group except its own. */
+    private FacetResult facets(Filters filters) {
+        Date startOfToday = Date.from(LocalDate.now(SHOP_ZONE).atStartOfDay(SHOP_ZONE).toInstant());
+        AggregationOperation countAll = ctx -> new Document("$count", "n");
+
+        List<AggregationOperation> operations = new ArrayList<>();
+        if (filters.searching()) operations.add(lookup("category", "categories.$id", "_id", "categoryDetails"));
+        operations.add(Aggregation.match(new Criteria().andOperator(filters.base().toArray(new Criteria[0]))));
+        operations.add(Aggregation
+                .facet(Aggregation.match(filters.except("categories")),
+                        Aggregation.unwind("categories"),
+                        // DBRef ids can't be referenced as "$categories.$id" in expressions; read them via $objectToArray
+                        ctx -> new Document("$project", new Document("cid", new Document("$arrayElemAt", List.of(
+                                new Document("$map", new Document("input", new Document("$objectToArray", "$categories"))
+                                        .append("in", "$$this.v")), 1)))),
+                        ctx -> new Document("$group", new Document("_id", "$cid").append("n", new Document("$sum", 1))))
+                .as("categories")
+                .and(Aggregation.match(filters.except("states")),
+                        ctx -> new Document("$match", new Document("location.state", new Document("$ne", null))),
+                        ctx -> new Document("$group", new Document("_id", "$location.state").append("n", new Document("$sum", 1))))
+                .as("states")
+                .and(Aggregation.match(filters.except("conditions")),
+                        ctx -> new Document("$match", new Document("condition", new Document("$ne", null))),
+                        ctx -> new Document("$group", new Document("_id", "$condition").append("n", new Document("$sum", 1))))
+                .as("conditions")
+                .and(Aggregation.match(filters.except("free")),
+                        ctx -> new Document("$match", new Document("isFree", true)),
+                        countAll)
+                .as("free")
+                .and(Aggregation.match(filters.all()),
+                        ctx -> new Document("$match", new Document("createdAt", new Document("$gte", startOfToday))),
+                        countAll)
+                .as("addedToday"));
+
+        Document row = mongoTemplate.aggregate(Aggregation.newAggregation(operations), "book", Document.class)
+                .getUniqueMappedResult();
+        if (row == null) row = new Document();
+
+        Map<String, Long> conditionCounts = new LinkedHashMap<>();
+        for (Constants.BookCondition c : Constants.BookCondition.values()) conditionCounts.put(c.name(), 0L);
+        conditionCounts.putAll(groupCounts(row, "conditions"));
+
+        BookQueryResponse.Facets facets = new BookQueryResponse.Facets(
+                groupCounts(row, "categories"), groupCounts(row, "states"), conditionCounts, singleCount(row, "free"));
+        return new FacetResult(facets, singleCount(row, "addedToday"));
+    }
+
+    private static Map<String, Long> groupCounts(Document row, String key) {
+        Map<String, Long> counts = new LinkedHashMap<>();
+        List<Document> rows = row.getList(key, Document.class, List.of());
+        rows.stream()
+                .filter(d -> d.get("_id") != null)
+                .sorted((a, b) -> Long.compare(((Number) b.get("n")).longValue(), ((Number) a.get("n")).longValue()))
+                .forEach(d -> counts.put(d.get("_id").toString(), ((Number) d.get("n")).longValue()));
+        return counts;
+    }
+
+    private static long singleCount(Document row, String key) {
+        List<Document> rows = row.getList(key, Document.class, List.of());
+        return rows.isEmpty() ? 0 : ((Number) rows.get(0).get("n")).longValue();
     }
 
     public List<Book> getSoldBooks(QuerySoldBooksDTO dto) {

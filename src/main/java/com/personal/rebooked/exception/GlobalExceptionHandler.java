@@ -39,7 +39,9 @@ public class GlobalExceptionHandler {
     public ResponseEntity<Object> handleValidation(BindException ex) {
         Map<String, String> errors = new LinkedHashMap<>();
         for (FieldError fieldError : ex.getBindingResult().getFieldErrors()) {
-            errors.putIfAbsent(fieldError.getField(), fieldError.getDefaultMessage());
+            // Type mismatches (e.g. minPrice=abc) carry Spring's conversion message; keep it readable
+            String message = fieldError.isBindingFailure() ? "Invalid value" : fieldError.getDefaultMessage();
+            errors.putIfAbsent(fieldError.getField(), message);
         }
         return ResponseHandler.generateError(HttpStatus.BAD_REQUEST, "Validation failed", errors);
     }
