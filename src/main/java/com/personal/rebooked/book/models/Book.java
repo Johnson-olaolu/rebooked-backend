@@ -1,7 +1,10 @@
 package com.personal.rebooked.book.models;
 
+import com.fasterxml.jackson.annotation.JsonIgnore;
+import com.fasterxml.jackson.annotation.JsonProperty;
 import com.personal.rebooked.category.models.Category;
 import com.personal.rebooked.file.models.File;
+import com.personal.rebooked.user.dto.PublicUserDTO;
 import com.personal.rebooked.user.models.User;
 import com.personal.rebooked.utils.Constants;
 import jakarta.validation.constraints.NotBlank;
@@ -12,7 +15,6 @@ import org.springframework.data.annotation.LastModifiedDate;
 import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
 
-import java.time.LocalDateTime;
 import java.util.Date;
 import java.util.List;
 
@@ -22,6 +24,8 @@ public class Book {
     @Id
     private String id;
 
+    /** The seller. Never serialised whole: responses get the public summary in {@link #getSeller()}. */
+    @JsonIgnore
     @DBRef
     User user;
 
@@ -30,8 +34,16 @@ public class Book {
 
     private String author;
 
-    @NotBlank
+    /** In naira. 0 when the book is free. */
     private Double price;
+
+    @JsonProperty("isFree")
+    private boolean isFree = false;
+
+    private Constants.BookCondition condition;
+
+    /** Normalised: digits only (ISBN-10 may end in X). */
+    private String isbn;
 
     private String description;
 
@@ -58,4 +70,9 @@ public class Book {
 
     @LastModifiedDate
     private Date updatedAt;
+
+    @JsonProperty("seller")
+    public PublicUserDTO getSeller() {
+        return PublicUserDTO.from(user);
+    }
 }

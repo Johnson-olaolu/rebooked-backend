@@ -11,7 +11,7 @@ import org.bson.Document;
 import org.bson.types.ObjectId;
 import org.springframework.data.mongodb.core.query.BasicQuery;
 
-import org.checkerframework.checker.units.qual.A;
+import com.personal.rebooked.exception.ApiException;
 import org.springframework.data.domain.Sort.Direction;
 import org.springframework.data.mongodb.core.aggregation.Aggregation;
 import org.springframework.data.mongodb.core.aggregation.AggregationOperation;
@@ -38,6 +38,9 @@ public class CategoryService {
     }
 
     public Category findById(String id) {
+        if (id == null || !ObjectId.isValid(id)) {
+            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Category not found");
+        }
         return categoryRepository.findById(id)
                 .orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND, "Category not found"));
     }
@@ -48,12 +51,26 @@ public class CategoryService {
     }
 
     public Category create(CreateCategoryDTO createCategoryDTO) {
+        String name = createCategoryDTO.name().trim();
+        requireUniqueName(name, null);
         Category category = new Category();
-        category.setName(createCategoryDTO.name());
+        category.setName(name);
         category.setDescription(createCategoryDTO.description());
         category.setImageUrl(createCategoryDTO.imageUrl());
-        category.setIsSeeded(createCategoryDTO.isSeeded());
+        // Only the seeder (via upsert) creates seeded categories; the client's value is ignored
+        category.setIsSeeded(false);
         return categoryRepository.save(category);
+    }
+
+    /** 409 if another category already has this name (case-insensitive). */
+    private void requireUniqueName(String name, String exceptId) {
+        Query query = new Query(Criteria.where("name")
+                .regex("^" + java.util.regex.Pattern.quote(name) + "$", "i"));
+        if (exceptId != null) query.addCriteria(Criteria.where("_id").ne(new ObjectId(exceptId)));
+        if (mongoTemplate.exists(query, Category.class)) {
+            throw new ApiException(HttpStatus.CONFLICT, "A category with this name already exists",
+                    java.util.Map.of("name", "A category with this name already exists"));
+        }
     }
 
     public void upsert(CreateCategoryDTO createCategoryDTO) {
@@ -68,8 +85,10 @@ public class CategoryService {
 
     public Category update(String id, UpdateCategoryDTO updateCategoryDTO) {
         Category category = findById(id);
-        if (updateCategoryDTO.name() != null) {
-            category.setName(updateCategoryDTO.name());
+        if (updateCategoryDTO.name() != null && !updateCategoryDTO.name().isBlank()) {
+            String name = updateCategoryDTO.name().trim();
+            requireUniqueName(name, category.getId());
+            category.setName(name);
         }
         return categoryRepository.save(category);
     }
@@ -90,7 +109,12 @@ public class CategoryService {
     }
 
     public void delete(String id) {
-        categoryRepository.deleteById(id);
+        Category category = findById(id);
+        // Remove the reference from every book first so no broken DBRefs are left behind
+        Object categoryId = ObjectId.isValid(category.getId()) ? new ObjectId(category.getId()) : category.getId();
+        mongoTemplate.updateMulti(new BasicQuery(new Document("categories.$id", categoryId)),
+                new Update().pull("categories", new Document("$id", categoryId)), Book.class);
+        categoryRepository.delete(category);
     }
 
 }

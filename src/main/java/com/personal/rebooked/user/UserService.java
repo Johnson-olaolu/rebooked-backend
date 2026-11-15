@@ -173,7 +173,7 @@ public class UserService {
                 profile.setProfilePictureUrl(null);
             } else {
                 File pictureFile = fileService.getFileById(dto.profilePictureId().trim());
-                if (!isOwnedBy(pictureFile, userId)) {
+                if (!FileService.isOwnedBy(pictureFile, userId)) {
                     errors.put("profilePictureId", "You can only use photos you uploaded");
                 } else {
                     profile.setProfilePicture(pictureFile);
@@ -221,14 +221,10 @@ public class UserService {
         return saved;
     }
 
-    private static boolean isOwnedBy(File file, String userId) {
-        return file.getUser() != null && userId.equals(file.getUser().getId());
-    }
-
     /** Best effort: never fails the request, and never deletes a file someone else owns or a book still uses. */
     private void deleteOldProfilePicture(File file, String userId) {
         try {
-            if (!isOwnedBy(file, userId)) return;
+            if (!FileService.isOwnedBy(file, userId)) return;
             Object fileId = ObjectId.isValid(file.getId()) ? new ObjectId(file.getId()) : file.getId();
             boolean usedByBook = mongoTemplate.exists(new BasicQuery(new org.bson.Document("$or", List.of(
                     new org.bson.Document("coverImage.$id", fileId),

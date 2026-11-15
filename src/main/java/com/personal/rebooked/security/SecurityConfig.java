@@ -1,5 +1,7 @@
 package com.personal.rebooked.security;
 
+import com.personal.rebooked.utils.Constants;
+
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.personal.rebooked.auth.jwt.JwtFilter;
 import com.personal.rebooked.utils.ResponseHandler;
@@ -63,10 +65,18 @@ public class SecurityConfig {
                             .requestMatchers("/user/me", "/user/me/**").authenticated()
                             .requestMatchers(HttpMethod.GET, "/user/*").permitAll()
                             .requestMatchers("/marketing/**").permitAll()
+                            .requestMatchers("/book/me").authenticated()
                             .requestMatchers("/book/*/view").permitAll()
                             .requestMatchers("/book/ai-picks").permitAll()
                             .requestMatchers("/book/most-viewed").permitAll()
                             .requestMatchers(HttpMethod.GET, "/category", "/category/top").permitAll()
+                            .requestMatchers(HttpMethod.POST, "/category", "/category/**").hasAuthority(Constants.ROLE_SUPER_ADMIN)
+                            .requestMatchers(HttpMethod.PATCH, "/category/**").hasAuthority(Constants.ROLE_SUPER_ADMIN)
+                            .requestMatchers(HttpMethod.DELETE, "/category/**").hasAuthority(Constants.ROLE_SUPER_ADMIN)
+                            // Shop browsing is public; the literal routes above/below stay as configured
+                            .requestMatchers(HttpMethod.GET, "/book/query").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/book/sold").authenticated()
+                            .requestMatchers(HttpMethod.GET, "/book/*").permitAll()
                             .requestMatchers("/documentation").permitAll()
                             .requestMatchers("/swagger-ui/**").permitAll()
                             .requestMatchers("/v3/api-docs/**").permitAll()

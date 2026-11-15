@@ -5,6 +5,8 @@ import com.personal.rebooked.file.respositories.FileRepository;
 import com.personal.rebooked.service.CloudinaryService;
 import com.personal.rebooked.user.models.User;
 import com.personal.rebooked.utils.Misc;
+import com.personal.rebooked.utils.Constants;
+import com.personal.rebooked.exception.ApiException;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
@@ -42,8 +44,32 @@ public class FileService {
         return fileRepository.findFilesByUserId(userId);
     }
 
+    /** True if the file was uploaded by the given user. */
+    public static boolean isOwnedBy(File file, String userId) {
+        return file != null && file.getUser() != null && userId != null && userId.equals(file.getUser().getId());
+    }
+
+    private static void requireOwner(File file, User caller) {
+        if (caller == null || !isOwnedBy(file, caller.getId())) {
+            throw new ApiException(HttpStatus.FORBIDDEN, "You can only change your own files");
+        }
+    }
+
+    /** Accept images only; anything else is a 400 on the "file" field. */
+    public static void validateImage(MultipartFile file) {
+        if (file == null || file.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Validation failed", Map.of("file", "Choose a photo to upload"));
+        }
+        String type = file.getContentType() == null ? "" : file.getContentType().toLowerCase(java.util.Locale.ROOT);
+        if (!Constants.ALLOWED_IMAGE_TYPES.contains(type)) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Validation failed",
+                    Map.of("file", "Photos must be JPEG, PNG, WebP or HEIC"));
+        }
+    }
+
     public File updateFile(String id, MultipartFile file, User user) {
         File fileData = getFileById(id);
+        requireOwner(fileData, user);
         cloudinaryService.delete(fileData.getCloudinaryId());
         Map<String, Object> metadata = cloudinaryService.upload(file);
         fileData.setSize(Misc.getStringSizeLengthFile(file.getSize()));
@@ -60,6 +86,13 @@ public class FileService {
         return fileRepository.findAll();
     }
 
+    /** DELETE /file/{id}: only the uploader may delete. */
+    public void deleteOwnedFile(String fileId, User caller) {
+        requireOwner(getFileById(fileId), caller);
+        deleteFile(fileId);
+    }
+
+    /** Internal: no ownership check (callers must have checked). */
     public void deleteFile(String fileId) {
         File file = getFileById(fileId);
         cloudinaryService.delete(file.getCloudinaryId());

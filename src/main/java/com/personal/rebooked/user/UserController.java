@@ -1,5 +1,7 @@
 package com.personal.rebooked.user;
 
+import com.personal.rebooked.user.dto.PublicUserDTO;
+
 import com.personal.rebooked.exception.ApiException;
 import com.personal.rebooked.user.dto.UpdateProfileDTO;
 import com.personal.rebooked.user.dto.UpdateUserDTO;
@@ -39,14 +41,19 @@ public class UserController {
 
     @GetMapping("")
     ResponseEntity<Object> getAllUser() {
-        List<User> users = userService.getAllUsers();
+        List<PublicUserDTO> users = userService.getAllUsers().stream().map(PublicUserDTO::from).toList();
         return ResponseHandler.generateResponse(users, "Users fetched successfully");
     }
 
     @GetMapping("/{id}")
     ResponseEntity<Object> getUserById(@PathVariable String id) {
         User user = userService.findUserById(id);
-        return ResponseHandler.generateResponse(user, "User fetched successfully");
+        if (isCurrentUser(id)) {
+            AddressPrivacy.showOwnerFields();
+            return ResponseHandler.generateResponse(user, "User fetched successfully");
+        }
+        // Everyone else gets the public summary: no email, phone or precise address
+        return ResponseHandler.generateResponse(PublicUserDTO.from(user), "User fetched successfully");
     }
 
     @ApiResponses({

@@ -170,7 +170,7 @@ public class Seeder implements ApplicationRunner {
         User adminUser = userService.findUserByEmail(Constants.superAdminDetails.email());
         for (CreateBookDto bookDto : books) {
             try {
-                bookService.create(adminUser, bookDto);
+                bookService.createForSeed(adminUser, bookDto);
             } catch (Exception e) {
                 logger.warning(String.format("Failed to add book %s: %s", bookDto.title(), e.getMessage()));
             }
@@ -179,15 +179,21 @@ public class Seeder implements ApplicationRunner {
 
     private CreateBookDto createBookDto(Constants.BookData bookData, List<String> categoryIds,
                                         List<String> tagNames, List<String> imageIds) {
+        List<String> images = Misc.getRandomIds(imageIds, 1, Constants.BOOK_MAX_IMAGES);
+        Constants.BookCondition[] conditions = Constants.BookCondition.values();
         return new CreateBookDto(
                 bookData.title(),
                 bookData.author(),
                 Misc.generateRandomPrice(),
+                false,
+                conditions[new Random().nextInt(conditions.length)],
+                null,
                 bookData.description(),
-                Misc.getRandomElement(imageIds), // cover image
-                Misc.getRandomIds(imageIds, 2, 4), // 2-4 additional images
+                images.isEmpty() ? null : images.get(0), // cover is one of the photos
+                images,
                 Misc.getRandomIds(categoryIds, 1, 10), // 1-10 categories
-                tagNames.isEmpty() ? null : Misc.getRandomIds(tagNames, 0, 3) // 0-4 tags
+                tagNames.isEmpty() ? null : Misc.getRandomIds(tagNames, 0, 3), // 0-3 tags
+                "ACTIVE"
         );
     }
 

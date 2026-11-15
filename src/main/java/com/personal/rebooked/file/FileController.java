@@ -1,18 +1,15 @@
 package com.personal.rebooked.file;
 
 import com.personal.rebooked.file.models.File;
+import com.personal.rebooked.security.CurrentUser;
 import com.personal.rebooked.user.models.User;
 import com.personal.rebooked.utils.ResponseHandler;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
 import lombok.RequiredArgsConstructor;
-import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
-import org.springframework.security.core.Authentication;
-import org.springframework.security.core.context.SecurityContextHolder;
 import org.springframework.web.bind.annotation.*;
 import org.springframework.web.multipart.MultipartFile;
-import org.springframework.web.server.ResponseStatusException;
 
 import java.util.List;
 
@@ -31,12 +28,9 @@ public class FileController {
     }
 
     @PostMapping("")
-    public ResponseEntity<Object> uploadFile(@RequestParam("file") MultipartFile file) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        User currentUser = (User) authentication.getPrincipal();
-        if (file.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
-        }
+    public ResponseEntity<Object> uploadFile(@RequestParam(value = "file", required = false) MultipartFile file) {
+        User currentUser = CurrentUser.require();
+        FileService.validateImage(file);
         File uploadedFile = fileService.upload(file, currentUser);
         return ResponseHandler.generateResponse(uploadedFile, "File successfully uploaded");
     }
@@ -48,19 +42,16 @@ public class FileController {
     }
 
     @PatchMapping("/{id}")
-    public ResponseEntity<Object> updateFile(@PathVariable String id, @RequestParam("file") MultipartFile file) {
-        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
-        User currentUser = (User) authentication.getPrincipal();
-        if (file.isEmpty()) {
-            throw new ResponseStatusException(HttpStatus.BAD_REQUEST);
-        }
+    public ResponseEntity<Object> updateFile(@PathVariable String id, @RequestParam(value = "file", required = false) MultipartFile file) {
+        User currentUser = CurrentUser.require();
+        FileService.validateImage(file);
         File uploadedFile = fileService.updateFile(id, file, currentUser);
         return ResponseHandler.generateResponse(uploadedFile, "File successfully updated");
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Object> deleteFile(@PathVariable String id) {
-        fileService.deleteFile(id);
+        fileService.deleteOwnedFile(id, CurrentUser.require());
         return ResponseHandler.generateResponse(true, "File deleted successfully");
     }
 }

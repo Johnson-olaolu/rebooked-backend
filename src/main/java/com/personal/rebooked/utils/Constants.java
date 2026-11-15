@@ -30,11 +30,13 @@ public class Constants {
     /** Minimum time between code resends for the same email. */
     public static final long EMAIL_CODE_RESEND_COOLDOWN_SECONDS = 30;
 
+    public static final String ROLE_SUPER_ADMIN = "superAdmin";
+
     public static CreateUserDto superAdminDetails = new CreateUserDto(
             "super_admin@rebooked.com",
             "Super Admin",
             "Admin_123",
-            "superAdmin",
+            ROLE_SUPER_ADMIN,
             true,
             null);
 
@@ -129,8 +131,22 @@ public class Constants {
     public enum BookStatus {
         ACTIVE,
         INACTIVE,
-        SOLD
+        SOLD,
+        DRAFT
     }
+
+    public enum BookCondition {
+        NEW,
+        LIKE_NEW,
+        GOOD,
+        FAIR
+    }
+
+    /** Image types accepted by POST/PATCH /file. */
+    public static final List<String> ALLOWED_IMAGE_TYPES = List.of(
+            "image/jpeg", "image/png", "image/webp", "image/heic", "image/heif");
+
+    public static final int BOOK_MAX_IMAGES = 5;
 
     public enum TimeQuery {
         LAST_WEEK,

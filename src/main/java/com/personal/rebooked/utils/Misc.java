@@ -135,4 +135,11 @@ public class Misc {
                 .limit(count)
                 .toList();
     }
+
+    /** Strips spaces and dashes; returns a 10-digit (last may be X) or 13-digit ISBN, or null if invalid. */
+    public static String normalizeIsbn(String input) {
+        if (input == null) return null;
+        String s = input.replaceAll("[\\s-]", "").toUpperCase(java.util.Locale.ROOT);
+        return s.matches("^\\d{9}[\\dX]$") || s.matches("^\\d{13}$") ? s : null;
+    }
 }

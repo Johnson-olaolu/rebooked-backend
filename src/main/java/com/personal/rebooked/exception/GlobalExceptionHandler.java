@@ -44,6 +44,12 @@ public class GlobalExceptionHandler {
         return ResponseHandler.generateError(HttpStatus.BAD_REQUEST, "Validation failed", errors);
     }
 
+    @ExceptionHandler(org.springframework.web.multipart.MaxUploadSizeExceededException.class)
+    public ResponseEntity<Object> handleTooLarge(org.springframework.web.multipart.MaxUploadSizeExceededException ex) {
+        return ResponseHandler.generateError(HttpStatus.PAYLOAD_TOO_LARGE, "Photos must be 10 MB or smaller.",
+                Map.of("file", "Photos must be 10 MB or smaller."));
+    }
+
     @ExceptionHandler(HttpMessageNotReadableException.class)
     public ResponseEntity<Object> handleUnreadable(HttpMessageNotReadableException ex) {
         return ResponseHandler.generateError(HttpStatus.BAD_REQUEST, "Malformed request body", null);
