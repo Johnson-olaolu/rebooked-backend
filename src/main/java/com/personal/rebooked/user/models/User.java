@@ -1,7 +1,6 @@
 package com.personal.rebooked.user.models;
 import com.fasterxml.jackson.annotation.JsonIgnore;
 import com.fasterxml.jackson.annotation.JsonIgnoreProperties;
-import com.personal.rebooked.user.role.models.Role;
 import com.personal.rebooked.utils.Constants;
 import jakarta.validation.constraints.NotNull;
 import lombok.Data;
@@ -47,13 +46,10 @@ public class User implements UserDetails {
     @NotNull
     private Constants.RegistrationType registrationType = Constants.RegistrationType.EMAIL;
 
-    @DBRef
-    private Role role;
+    private String role;
 
     @DBRef
     private Profile profile;
-
-    private  boolean isOnboarded = false;
 
     @NotNull()
     private boolean isEmailVerified = false;
@@ -62,13 +58,13 @@ public class User implements UserDetails {
     private String confirmEmailToken ;
 
     @JsonIgnore
-    private LocalDate confirmEmailTokenTTL;
+    private LocalDateTime confirmEmailTokenTTL;
 
     @JsonIgnore
     private String changePasswordToken;
 
     @JsonIgnore
-    private LocalDate changePasswordTokenTTL;
+    private LocalDateTime changePasswordTokenTTL;
 
     private boolean isDeleted = false;
 
@@ -81,29 +77,34 @@ public class User implements UserDetails {
     @JsonIgnore
     @Override
     public Collection<? extends GrantedAuthority> getAuthorities() {
-        return List.of(new SimpleGrantedAuthority(role.getName()));
+        return List.of(new SimpleGrantedAuthority(role != null && !role.isBlank() ? role : "user"));
     }
 
+    @JsonIgnore
     @Override
     public String getUsername() {
         return email;
     }
 
+    @JsonIgnore
     @Override
     public boolean isAccountNonExpired() {
         return !isDeleted;
     }
 
+    @JsonIgnore
     @Override
     public boolean isAccountNonLocked() {
         return true;
     }
 
+    @JsonIgnore
     @Override
     public boolean isCredentialsNonExpired() {
         return UserDetails.super.isCredentialsNonExpired();
     }
 
+    @JsonIgnore
     @Override
     public boolean isEnabled() {
         return UserDetails.super.isEnabled();

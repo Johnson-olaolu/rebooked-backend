@@ -1,8 +1,10 @@
 package com.personal.rebooked.user;
 
+import com.personal.rebooked.exception.ApiException;
 import com.personal.rebooked.file.FileService;
 import com.personal.rebooked.file.models.File;
 import com.personal.rebooked.service.MailService;
+import com.personal.rebooked.user.dto.AddressDTO;
 import com.personal.rebooked.user.dto.CreateUserDto;
 import com.personal.rebooked.user.dto.UpdateProfileDTO;
 import com.personal.rebooked.user.dto.UpdateUserDTO;
@@ -12,37 +14,42 @@ import com.personal.rebooked.user.models.User;
 import com.personal.rebooked.user.repositories.AddressRepository;
 import com.personal.rebooked.user.repositories.ProfileRepository;
 import com.personal.rebooked.user.repositories.UserRepository;
-import com.personal.rebooked.user.role.RoleService;
-import com.personal.rebooked.user.role.models.Role;
 import com.personal.rebooked.utils.Constants;
 import com.personal.rebooked.utils.Misc;
+import com.personal.rebooked.book.models.Book;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
+import org.bson.types.ObjectId;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.BasicQuery;
+import org.springframework.data.mongodb.core.geo.GeoJsonPoint;
 import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
-import java.lang.reflect.Field;
-import java.time.LocalDate;
+import java.time.LocalDateTime;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
+@Slf4j
 @RequiredArgsConstructor
 @Service
 public class UserService {
 
     private final UserRepository userRepository;
     private final AddressRepository addressRepository;
-    private final RoleService roleService;
     private final MailService mailService;
     private final FileService fileService;
     private final ProfileRepository profileRepository;
+    private final MongoTemplate mongoTemplate;
 
     public User createUser(CreateUserDto createUserDto) {
-        Role role = roleService.getRoleByName(createUserDto.roleName());
         User user = new User();
         user.setFullName(createUserDto.fullName());
         user.setPassword(createUserDto.password());
         user.setEmail(createUserDto.email());
-        user.setRole(role);
+        user.setRole(createUserDto.roleName());
         user.setPassword(createUserDto.password());
         user.setRegistrationType(Constants.RegistrationType.EMAIL);
         User userWithEmail = sendConfirmEmailToken(user);
@@ -54,14 +61,12 @@ public class UserService {
     }
 
     public User createUserOauth(CreateUserDto createUserDto, Constants.RegistrationType registrationType) {
-        Role role = roleService.getRoleByName(createUserDto.roleName());
         User user = new User();
         user.setFullName(createUserDto.fullName());
         user.setPassword(createUserDto.password());
         user.setEmail(createUserDto.email());
-        user.setRole(role);
+        user.setRole(createUserDto.roleName());
         user.setRegistrationType(registrationType);
-        user.setPassword(createUserDto.password());
         user.setEmailVerified(true);
         Profile profile = new Profile();
         profile.setProfilePictureUrl(createUserDto.profilePictureUrl());
@@ -72,42 +77,47 @@ public class UserService {
 
     public User sendConfirmEmailToken(User user) {
         String confirmEmailToken = Misc.getToken();
-        LocalDate dateAfter2weeks = LocalDate.now().plusWeeks(2);
         user.setConfirmEmailToken(confirmEmailToken);
-        user.setConfirmEmailTokenTTL(dateAfter2weeks);
+        user.setConfirmEmailTokenTTL(LocalDateTime.now().plusMinutes(Constants.EMAIL_CODE_TTL_MINUTES));
         mailService.sendConfirmEmailMail(user);
         return userRepository.save(user);
     }
 
     public User confirmEmail(User user, String token) {
-        if (user.getConfirmEmailToken().equals(token) && user.getConfirmEmailTokenTTL().isAfter(LocalDate.now())) {
+        if (isValidCode(user.getConfirmEmailToken(), user.getConfirmEmailTokenTTL(), token)) {
             user.setConfirmEmailToken(null);
             user.setConfirmEmailTokenTTL(null);
             user.setEmailVerified(true);
             return userRepository.save(user);
         } else {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid token");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid or expired code");
         }
     }
 
     public User sendChangePasswordToken(User user) {
         String changePasswordToken = Misc.getToken();
-        LocalDate dateAfter2weeks = LocalDate.now().plusWeeks(2);
         user.setChangePasswordToken(changePasswordToken);
-        user.setChangePasswordTokenTTL(dateAfter2weeks);
+        user.setChangePasswordTokenTTL(LocalDateTime.now().plusMinutes(Constants.EMAIL_CODE_TTL_MINUTES));
         mailService.sendChangepasswordMail(user);
         return userRepository.save(user);
     }
 
     public User changePassword(User user, String token, String password) {
-        if (user.getChangePasswordToken().equals(token) && user.getChangePasswordTokenTTL().isAfter(LocalDate.now())) {
+        if (isValidCode(user.getChangePasswordToken(), user.getChangePasswordTokenTTL(), token)) {
             user.setChangePasswordToken(null);
             user.setChangePasswordTokenTTL(null);
             user.setPassword(password);
             return userRepository.save(user);
         } else {
-            throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "invalid token");
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid or expired code");
         }
+    }
+
+    private boolean isValidCode(String storedCode, LocalDateTime expiresAt, String submittedCode) {
+        return storedCode != null
+                && expiresAt != null
+                && storedCode.equals(submittedCode)
+                && expiresAt.isAfter(LocalDateTime.now());
     }
 
     public User findUserById(String id) {
@@ -124,72 +134,186 @@ public class UserService {
 
     public User updateUser(String userId, UpdateUserDTO updateUserDTO) {
         User user = findUserById(userId);
-
-        Field[] dtoFields = UpdateUserDTO.class.getDeclaredFields();
-        Field[] entityFields = User.class.getDeclaredFields();
-
-        for (Field dtoField : dtoFields) {
-            dtoField.setAccessible(true); // Access private fields
-            try {
-                Object value = dtoField.get(updateUserDTO); // Get value of the field in the DTO
-                if (value != null) {
-                    for (Field entityField : entityFields) {
-                        if (entityField.getName().equals(dtoField.getName())) {
-                            entityField.setAccessible(true); // Access private entity field
-                            entityField.set(user, value); // Set the value
-                        }
-                    }
-                }
-            } catch (Exception e) {
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage());
-            }
+        // Set fields explicitly so new User fields are never writable by accident. Email changes are not allowed here.
+        if (updateUserDTO.fullName() != null) {
+            user.setFullName(updateUserDTO.fullName().trim());
         }
         return userRepository.save(user);
     }
 
-    public User updateUserProfile(String userId, UpdateProfileDTO updateProfileDTO) {
+    public User updateUserProfile(String userId, UpdateProfileDTO dto) {
         User user = findUserById(userId);
-        Profile profile = user.getProfile();
-        Field[] dtoFields = UpdateProfileDTO.class.getDeclaredFields();
-        Field[] entityFields = Profile.class.getDeclaredFields();
-        Address address = new Address();
-        address.setCountry(updateProfileDTO.address().getCountry());
-        address.setState(updateProfileDTO.address().getState());
-        address.setCity(updateProfileDTO.address().getCity());
-        address.setAddressLine(updateProfileDTO.address().getAddressLine());
-        for (Field dtoField : dtoFields) {
-            dtoField.setAccessible(true);
-            try {
-                Object value = dtoField.get(updateProfileDTO);
-                if (dtoField.getName().equals("profilePictureId")) {
-                    if (value != null) {
-                        File pictureFile = fileService.getFileById((String) value);
-                        profile.setProfilePicture(pictureFile);
-                        profile.setProfilePictureUrl(pictureFile.getUrl());
-                    }
+        Profile profile = user.getProfile() != null ? user.getProfile() : new Profile();
 
+        Map<String, String> errors = new LinkedHashMap<>();
+
+        // 1. Merge only the fields that were sent. null = leave unchanged, "" = clear.
+        if (dto.userName() != null) profile.setUserName(blankToNull(dto.userName()));
+        if (dto.bio() != null) profile.setBio(blankToNull(dto.bio()));
+        if (dto.contactEmail() != null) profile.setContactEmail(blankToNull(dto.contactEmail()));
+        if (dto.contactPhone() != null) {
+            String phone = blankToNull(dto.contactPhone());
+            if (phone == null) {
+                profile.setContactPhone(null);
+            } else {
+                String normalised = Misc.normalizeNigerianPhone(phone);
+                if (normalised == null) {
+                    errors.put("contactPhone", "Enter a valid Nigerian phone number");
                 } else {
-                    if (value != null) {
-                        for (Field entityField : entityFields) {
-                            if (entityField.getName().equals(dtoField.getName())) {
-                                entityField.setAccessible(true); // Access private entity field
-                                entityField.set(profile, value); // Set the value
-                            }
-                        }
-                    }
+                    profile.setContactPhone(normalised);
                 }
-
-            } catch (Exception e) {
-                System.err.println(e.getStackTrace());
-                throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, e.getMessage());
             }
         }
-        profile.setAddress(address);
-        Profile updatedprofile = profileRepository.save(profile);
-        System.out.println(updatedprofile);
-        user.setProfile(updatedprofile);
-        user.setOnboarded(true);
-        return userRepository.save(user);
+
+        File previousPicture = profile.getProfilePicture();
+        if (dto.profilePictureId() != null) {
+            if (dto.profilePictureId().isBlank()) {
+                // "" removes the photo
+                profile.setProfilePicture(null);
+                profile.setProfilePictureUrl(null);
+            } else {
+                File pictureFile = fileService.getFileById(dto.profilePictureId().trim());
+                if (!isOwnedBy(pictureFile, userId)) {
+                    errors.put("profilePictureId", "You can only use photos you uploaded");
+                } else {
+                    profile.setProfilePicture(pictureFile);
+                    profile.setProfilePictureUrl(pictureFile.getUrl());
+                }
+            }
+        }
+
+        if (dto.address() != null) {
+            Address address = profile.getAddress() != null ? profile.getAddress() : new Address();
+            mergeAddress(address, dto.address(), errors);
+            profile.setAddress(address);
+        }
+
+        // 2. Validate the merged result; nothing is saved if anything is wrong
+        boolean incomplete = false;
+        if (isBlank(profile.getUserName())) {
+            errors.put("userName", "Display name is required");
+            incomplete = true;
+        } else if (profile.getUserName().length() < 2 || profile.getUserName().length() > 40) {
+            errors.put("userName", "Display name must be 2 to 40 characters");
+        }
+        if (profile.getBio() != null && profile.getBio().length() > 300) {
+            errors.put("bio", "Bio must be at most 300 characters");
+        }
+        if (profile.getContactEmail() != null && !Misc.isValidEmail(profile.getContactEmail())) {
+            errors.put("contactEmail", "Enter a valid email address");
+        }
+        incomplete |= validateAddress(profile.getAddress(), errors);
+        if (!errors.isEmpty()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, incomplete ? "Profile incomplete" : "Validation failed", errors);
+        }
+
+        // 3. Only the server marks onboarding as complete
+        profile.setOnboardingCompleted(true);
+        user.setProfile(profileRepository.save(profile));
+        User saved = userRepository.save(user);
+
+        // 4. Clean up a replaced or removed photo once the new profile is saved
+        File currentPicture = profile.getProfilePicture();
+        if (previousPicture != null
+                && (currentPicture == null || !previousPicture.getId().equals(currentPicture.getId()))) {
+            deleteOldProfilePicture(previousPicture, userId);
+        }
+        return saved;
+    }
+
+    private static boolean isOwnedBy(File file, String userId) {
+        return file.getUser() != null && userId.equals(file.getUser().getId());
+    }
+
+    /** Best effort: never fails the request, and never deletes a file someone else owns or a book still uses. */
+    private void deleteOldProfilePicture(File file, String userId) {
+        try {
+            if (!isOwnedBy(file, userId)) return;
+            Object fileId = ObjectId.isValid(file.getId()) ? new ObjectId(file.getId()) : file.getId();
+            boolean usedByBook = mongoTemplate.exists(new BasicQuery(new org.bson.Document("$or", List.of(
+                    new org.bson.Document("coverImage.$id", fileId),
+                    new org.bson.Document("images.$id", fileId)))), Book.class);
+            if (usedByBook) return;
+            fileService.deleteFile(file.getId());
+        } catch (Exception e) {
+            log.warn("Could not delete replaced profile picture {}", file.getId(), e);
+        }
+    }
+
+    private void mergeAddress(Address address, AddressDTO incoming, Map<String, String> errors) {
+        if (incoming.country() != null) address.setCountry(incoming.country().trim().toUpperCase(java.util.Locale.ROOT));
+        if (incoming.state() != null) address.setState(incoming.state().trim());
+        if (incoming.city() != null) address.setCity(incoming.city().trim());
+        // Optional fields: null = not sent (keep), "" = clear
+        if (incoming.addressLine() != null) address.setAddressLine(blankToNull(incoming.addressLine()));
+        if (incoming.formattedAddress() != null) address.setFormattedAddress(blankToNull(incoming.formattedAddress()));
+
+        boolean hasLat = incoming.latitude() != null;
+        boolean hasLng = incoming.longitude() != null;
+        if (hasLat != hasLng) {
+            errors.put("address.location", "Send latitude and longitude together");
+            return;
+        }
+        if (hasLat) {
+            // GeoJsonPoint takes (x = longitude, y = latitude)
+            address.setLocation(new GeoJsonPoint(incoming.longitude(), incoming.latitude()));
+            if (incoming.placeId() != null) address.setPlaceId(blankToNull(incoming.placeId()));
+        } else if (incoming.placeId() != null) {
+            // A placeId (even "") without coordinates means the Google data is stale: drop it rather than keep old coordinates
+            address.setLocation(null);
+            address.setPlaceId(null);
+        }
+    }
+
+    /** Adds address errors; returns true if a required field is missing. */
+    private boolean validateAddress(Address address, Map<String, String> errors) {
+        if (address == null) {
+            errors.put("address.state", "State is required");
+            errors.put("address.city", "City is required");
+            return true;
+        }
+        boolean incomplete = false;
+        if (isBlank(address.getCountry())) {
+            address.setCountry(Constants.DEFAULT_COUNTRY);
+        } else if (!Constants.DEFAULT_COUNTRY.equals(address.getCountry())) {
+            errors.put("address.country", "Only Nigeria (NG) is supported");
+        }
+
+        if (isBlank(address.getState())) {
+            errors.put("address.state", "State is required");
+            incomplete = true;
+        } else {
+            String state = Misc.normalizeNigerianState(address.getState());
+            if (state == null) {
+                errors.put("address.state", "Select a valid Nigerian state");
+            } else {
+                address.setState(state);
+            }
+        }
+
+        if (isBlank(address.getCity())) {
+            errors.put("address.city", "City is required");
+            incomplete = true;
+        }
+
+        GeoJsonPoint location = address.getLocation();
+        if (location != null && !errors.containsKey("address.location")) {
+            double lat = location.getY();
+            double lng = location.getX();
+            if (lat < Constants.NG_MIN_LAT || lat > Constants.NG_MAX_LAT
+                    || lng < Constants.NG_MIN_LNG || lng > Constants.NG_MAX_LNG) {
+                errors.put("address.location", "Location must be in Nigeria");
+            }
+        }
+        return incomplete;
+    }
+
+    private static String blankToNull(String value) {
+        return value == null || value.isBlank() ? null : value.trim();
+    }
+
+    private static boolean isBlank(String value) {
+        return value == null || value.isBlank();
     }
 
     public void deleteUser(String userId) {

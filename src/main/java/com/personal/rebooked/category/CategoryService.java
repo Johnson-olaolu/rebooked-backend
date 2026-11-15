@@ -5,7 +5,11 @@ import com.personal.rebooked.category.dto.CreateCategoryDTO;
 import com.personal.rebooked.category.dto.UpdateCategoryDTO;
 import com.personal.rebooked.category.models.Category;
 import com.personal.rebooked.category.repositories.CategoryRepository;
+import com.personal.rebooked.book.models.Book;
 import lombok.RequiredArgsConstructor;
+import org.bson.Document;
+import org.bson.types.ObjectId;
+import org.springframework.data.mongodb.core.query.BasicQuery;
 
 import org.checkerframework.checker.units.qual.A;
 import org.springframework.data.domain.Sort.Direction;
@@ -19,6 +23,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
+import java.util.Comparator;
 import java.util.List;
 
 @RequiredArgsConstructor
@@ -70,8 +75,18 @@ public class CategoryService {
     }
 
     public List<Category> fetchTopCategories(int limit) {
-        List<Category> categories = categoryRepository.findTopCategories(limit);
-        return categories;
+        // Books reference categories via @DBRef, stored as { $ref: 'category', $id: ObjectId }.
+        // Counting with a find query on "categories.$id" is simpler and more reliable than an aggregation over DBRefs.
+        List<Category> categories = categoryRepository.findByIsSeededTrue();
+        for (Category category : categories) {
+            Object id = ObjectId.isValid(category.getId()) ? new ObjectId(category.getId()) : category.getId();
+            long count = mongoTemplate.count(new BasicQuery(new Document("categories.$id", id)), Book.class);
+            category.setBooksCount((int) count);
+        }
+        return categories.stream()
+                .sorted(Comparator.comparing(Category::getBooksCount).reversed())
+                .limit(limit)
+                .toList();
     }
 
     public void delete(String id) {

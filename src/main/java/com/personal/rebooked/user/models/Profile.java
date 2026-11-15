@@ -32,6 +32,9 @@ public class Profile {
 
     private Address address;
 
+    /** Set by the server when userName and address.city are filled in. Never accepted from clients. */
+    private boolean onboardingCompleted = false;
+
     @CreatedDate
     private Date createdAt;
 

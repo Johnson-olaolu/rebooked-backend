@@ -4,7 +4,7 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 
 import java.util.HashMap;
-import java.util.List;
+import java.util.LinkedHashMap;
 import java.util.Map;
 
 public class ResponseHandler {
@@ -26,6 +26,20 @@ public class ResponseHandler {
         map.put("data", responseObj);
 
         return new ResponseEntity<Object>(map, status);
+    }
+
+    public static Map<String, Object> errorBody(HttpStatus status, String message, Map<String, String> errors) {
+        Map<String, Object> map = new LinkedHashMap<>();
+        map.put("status", status.value());
+        map.put("message", message);
+        if (errors != null && !errors.isEmpty()) {
+            map.put("errors", errors);
+        }
+        return map;
+    }
+
+    public static ResponseEntity<Object> generateError(HttpStatus status, String message, Map<String, String> errors) {
+        return new ResponseEntity<>(errorBody(status, message, errors), status);
     }
 
 }

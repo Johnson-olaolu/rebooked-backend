@@ -9,6 +9,43 @@ import java.util.regex.Pattern;
 
 public class Misc {
 
+    /**
+     * Maps user or Google input to a canonical name from {@link Constants#NIGERIAN_STATES}, case-insensitively.
+     * "Lagos State" becomes "Lagos"; "Abuja", "FCT" and "Federal Capital Territory" become "Federal Capital Territory".
+     * Returns null when the input doesn't match any state.
+     */
+    public static String normalizeNigerianState(String input) {
+        if (input == null) return null;
+        String value = input.trim().replaceAll("\\s+", " ").toLowerCase(java.util.Locale.ROOT);
+        if (value.isEmpty()) return null;
+        if (value.equals("abuja") || value.equals("fct") || value.startsWith("federal capital territory")
+                || value.equals("abuja federal capital territory")) {
+            return "Federal Capital Territory";
+        }
+        if (value.endsWith(" state")) {
+            value = value.substring(0, value.length() - " state".length()).trim();
+        }
+        for (String state : Constants.NIGERIAN_STATES) {
+            if (state.toLowerCase(java.util.Locale.ROOT).equals(value)) return state;
+        }
+        return null;
+    }
+
+    private static final java.util.regex.Pattern NG_PHONE = java.util.regex.Pattern.compile("^(\\+234|0)([789][01]\\d{8})$");
+    private static final java.util.regex.Pattern EMAIL = java.util.regex.Pattern.compile("^[^\\s@]+@[^\\s@]+\\.[^\\s@]+$");
+
+    /** Accepts 0803… or +234803… (spaces, dashes and brackets ignored). Returns E.164 (+234…) or null if invalid. */
+    public static String normalizeNigerianPhone(String input) {
+        if (input == null) return null;
+        String compact = input.replaceAll("[\\s\\-()]", "");
+        java.util.regex.Matcher m = NG_PHONE.matcher(compact);
+        return m.matches() ? "+234" + m.group(2) : null;
+    }
+
+    public static boolean isValidEmail(String input) {
+        return input != null && input.length() <= 254 && EMAIL.matcher(input).matches();
+    }
+
     public  static  String getToken() {
         SecureRandom random = new SecureRandom();
         StringBuilder token = new StringBuilder();

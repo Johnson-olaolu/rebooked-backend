@@ -2,17 +2,33 @@ package com.personal.rebooked.utils;
 
 import com.personal.rebooked.category.dto.CreateCategoryDTO;
 import com.personal.rebooked.user.dto.CreateUserDto;
-import com.personal.rebooked.user.role.dto.CreateRoleDTO;
-
 import java.util.Arrays;
 import java.util.List;
 
 public class Constants {
 
-    public static List<CreateRoleDTO> userRoleList = List.of(
-            new CreateRoleDTO("user", "USER"),
-            new CreateRoleDTO("admin", "ADMIN"),
-            new CreateRoleDTO("superAdmin", "SUPER ADMIN"));
+    public static final String PASSWORD_REGEX = "^(?=.*[0-9])(?=.*[a-z])(?=.*[A-Z])(?=.*[^A-Za-z0-9])(?=\\S+$).{8,}$";
+    public static final String PASSWORD_MESSAGE = "Password must be at least 8 characters with an uppercase letter, a lowercase letter, a number and a symbol";
+
+    /** How long email verification and password reset codes stay valid. */
+    public static final long EMAIL_CODE_TTL_MINUTES = 15;
+
+    /** Only Nigeria is supported for now. */
+    public static final String DEFAULT_COUNTRY = "NG";
+
+    /** Canonical Nigerian state names. The frontend uses the same names. */
+    public static final List<String> NIGERIAN_STATES = List.of(
+            "Abia", "Adamawa", "Akwa Ibom", "Anambra", "Bauchi", "Bayelsa", "Benue", "Borno",
+            "Cross River", "Delta", "Ebonyi", "Edo", "Ekiti", "Enugu", "Gombe", "Imo", "Jigawa",
+            "Kaduna", "Kano", "Katsina", "Kebbi", "Kogi", "Kwara", "Lagos", "Nasarawa", "Niger",
+            "Ogun", "Ondo", "Osun", "Oyo", "Plateau", "Rivers", "Sokoto", "Taraba", "Yobe", "Zamfara",
+            "Federal Capital Territory");
+
+    /** Rough bounding box for Nigeria, used to reject obviously wrong coordinates. */
+    public static final double NG_MIN_LAT = 4.0, NG_MAX_LAT = 14.0, NG_MIN_LNG = 2.5, NG_MAX_LNG = 15.0;
+
+    /** Minimum time between code resends for the same email. */
+    public static final long EMAIL_CODE_RESEND_COOLDOWN_SECONDS = 30;
 
     public static CreateUserDto superAdminDetails = new CreateUserDto(
             "super_admin@rebooked.com",

@@ -11,18 +11,26 @@ import com.personal.rebooked.file.FileService;
 import com.personal.rebooked.file.models.File;
 import com.personal.rebooked.user.UserService;
 import com.personal.rebooked.user.dto.CreateUserDto;
+import com.personal.rebooked.user.models.Profile;
 import com.personal.rebooked.user.models.User;
-import com.personal.rebooked.user.role.RoleService;
-import com.personal.rebooked.user.role.dto.CreateRoleDTO;
-import com.personal.rebooked.user.role.models.Role;
 import com.personal.rebooked.utils.Constants;
 import com.personal.rebooked.utils.Misc;
 import lombok.RequiredArgsConstructor;
 import opennlp.tools.parser.Cons;
+import com.mongodb.client.MongoCollection;
+import com.mongodb.client.model.Filters;
+import com.mongodb.client.model.Projections;
+import com.mongodb.client.model.Updates;
+import org.bson.Document;
 import org.springframework.boot.ApplicationArguments;
 import org.springframework.boot.ApplicationRunner;
+import org.springframework.data.mongodb.core.MongoTemplate;
+import org.springframework.data.mongodb.core.query.Criteria;
+import org.springframework.data.mongodb.core.query.Query;
+import org.springframework.data.mongodb.core.query.Update;
 import org.springframework.stereotype.Component;
 
+import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.List;
@@ -37,7 +45,6 @@ import static com.personal.rebooked.utils.Misc.getRandomElement;
 @Component
 public class Seeder implements ApplicationRunner {
 
-    private final RoleService roleService;
 
     private final UserService userService;
 
@@ -47,25 +54,16 @@ public class Seeder implements ApplicationRunner {
     private final TagRepository tagRepository;
     private final FileService fileService;
     private final BookService bookService;
+    private final MongoTemplate mongoTemplate;
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
-        seedRoles();
         seedSuperAdmin();
         seedCategories();
+        migrateAddresses();
+        migrateOnboardingFlag();
+        expireLegacyEmailCodes();
 //        seedBooks();
-    }
-
-    private void seedRoles() {
-        List<CreateRoleDTO> roleDTOList = Constants.userRoleList;
-        for (CreateRoleDTO createRoleDTO : roleDTOList) {
-            try {
-                Role role = roleService.getRoleByName(createRoleDTO.name());
-            } catch (Exception e) {
-                Role role = roleService.createRole(createRoleDTO);
-                logger.info(String.format("Role %s created", role.getName()));
-            }
-        }
     }
 
     private void seedSuperAdmin() {
@@ -76,6 +74,60 @@ public class Seeder implements ApplicationRunner {
             logger.info(String.format("Super admin %s created", user.getFullName()));
         }
 
+    }
+
+    /**
+     * One-off, idempotent: mark existing profiles that already have a display name and city as onboarded,
+     * and drop the old User.isOnboarded field. Safe to delete once it has run everywhere.
+     */
+    private void migrateOnboardingFlag() {
+        Query complete = new Query(new Criteria().andOperator(
+                Criteria.where("onboardingCompleted").ne(true),
+                Criteria.where("userName").exists(true).nin(null, "").not().regex("^\\s*$"),
+                Criteria.where("address.state").exists(true).nin(null, "").not().regex("^\\s*$"),
+                Criteria.where("address.city").exists(true).nin(null, "").not().regex("^\\s*$")
+        ));
+        long updated = mongoTemplate.updateMulti(complete, Update.update("onboardingCompleted", true), Profile.class)
+                .getModifiedCount();
+        if (updated > 0) logger.info(String.format("Marked %d existing profiles as onboarded", updated));
+
+        mongoTemplate.updateMulti(new Query(Criteria.where("isOnboarded").exists(true)),
+                new Update().unset("isOnboarded"), User.class);
+    }
+
+    /**
+     * One-off, idempotent: default address.country to "NG" and normalise address.state to the canonical names.
+     * Runs before migrateOnboardingFlag so normalised states count towards onboarding.
+     */
+    private void migrateAddresses() {
+        Query noCountry = new Query(new Criteria().andOperator(
+                Criteria.where("address").type(3), // 3 = embedded document
+                new Criteria().orOperator(
+                        Criteria.where("address.country").exists(false),
+                        Criteria.where("address.country").in(null, ""))));
+        mongoTemplate.updateMulti(noCountry, Update.update("address.country", Constants.DEFAULT_COUNTRY), Profile.class);
+
+        MongoCollection<Document> profiles = mongoTemplate.getCollection(mongoTemplate.getCollectionName(Profile.class));
+        int normalised = 0;
+        for (Document doc : profiles.find(Filters.type("address.state", org.bson.BsonType.STRING))
+                .projection(Projections.include("address.state"))) {
+            String current = doc.get("address", Document.class).getString("state");
+            String canonical = Misc.normalizeNigerianState(current);
+            if (canonical != null && !canonical.equals(current)) {
+                profiles.updateOne(Filters.eq("_id", doc.get("_id")), Updates.set("address.state", canonical));
+                normalised++;
+            }
+        }
+        if (normalised > 0) logger.info(String.format("Normalised %d address states", normalised));
+    }
+
+    /** Codes issued under the old 2-week expiry are invalidated; users can request a new one. */
+    private void expireLegacyEmailCodes() {
+        LocalDateTime maxValid = LocalDateTime.now().plusMinutes(Constants.EMAIL_CODE_TTL_MINUTES);
+        mongoTemplate.updateMulti(new Query(Criteria.where("confirmEmailTokenTTL").gt(maxValid)),
+                new Update().unset("confirmEmailToken").unset("confirmEmailTokenTTL"), User.class);
+        mongoTemplate.updateMulti(new Query(Criteria.where("changePasswordTokenTTL").gt(maxValid)),
+                new Update().unset("changePasswordToken").unset("changePasswordTokenTTL"), User.class);
     }
 
     private void seedCategories() {
