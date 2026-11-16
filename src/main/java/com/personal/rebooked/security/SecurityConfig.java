@@ -4,6 +4,7 @@ import com.personal.rebooked.utils.Constants;
 
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.personal.rebooked.auth.jwt.JwtFilter;
+import com.personal.rebooked.config.AllowedOrigins;
 import com.personal.rebooked.utils.ResponseHandler;
 import jakarta.servlet.http.HttpServletResponse;
 import lombok.RequiredArgsConstructor;
@@ -35,6 +36,7 @@ public class SecurityConfig {
     private final AuthenticationProvider authenticationProvider;
     private final JwtFilter jwtFilter;
     private final ObjectMapper objectMapper;
+    private final AllowedOrigins allowedOrigins;
 
     @Bean
     CorsConfigurationSource corsConfigurationSource() {
@@ -44,8 +46,17 @@ public class SecurityConfig {
         configuration.setAllowedMethods(List.of("*"));
         configuration.setAllowedHeaders(List.of("*"));
 
+        // SockJS sends credentials, so the socket needs exact origins rather than "*".
+        // Registered first: the first matching pattern wins.
+        CorsConfiguration socket = new CorsConfiguration();
+        socket.setAllowedOriginPatterns(allowedOrigins.list());
+        socket.setAllowedMethods(List.of("*"));
+        socket.setAllowedHeaders(List.of("*"));
+        socket.setAllowCredentials(true);
+
         UrlBasedCorsConfigurationSource source = new UrlBasedCorsConfigurationSource();
 
+        source.registerCorsConfiguration("/ws/**", socket);
         source.registerCorsConfiguration("/**", configuration);
 
         return source;
@@ -61,6 +72,10 @@ public class SecurityConfig {
                             .requestMatchers("/").permitAll()
                             .requestMatchers("/error").permitAll()
                             .requestMatchers("/auth/**").permitAll()
+                            // The socket authenticates on STOMP CONNECT (StompAuthInterceptor)
+                            .requestMatchers("/ws/**").permitAll()
+                            // The signed token in the email link is the credential
+                            .requestMatchers(HttpMethod.POST, "/notification/unsubscribe").permitAll()
                             // Only public profiles are open; /user/me must win over the GET /user/* rule below
                             .requestMatchers("/user/me", "/user/me/**").authenticated()
                             .requestMatchers(HttpMethod.GET, "/user/*").permitAll()

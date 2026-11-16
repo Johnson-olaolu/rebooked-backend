@@ -31,6 +31,7 @@ public class Constants {
     public static final long EMAIL_CODE_RESEND_COOLDOWN_SECONDS = 30;
 
     public static final String ROLE_SUPER_ADMIN = "superAdmin";
+    public static final String ROLE_USER = "user";
 
     public static CreateUserDto superAdminDetails = new CreateUserDto(
             "super_admin@rebooked.com",
@@ -156,16 +157,30 @@ public class Constants {
         LAST_YEAR
     }
 
-    public enum ChatType {
-        REQUEST,
-        BID,
-        MESSAGE
+    /** Where an attached book stands in one conversation. */
+    public enum ConversationBookState {
+        OPEN,
+        SOLD_TO_BUYER,
+        SOLD_ELSEWHERE,
+        UNAVAILABLE
     }
 
-    public enum NotificationMetaType {
-        NEW_MESSAGE,
-        BOOK_STATUS_CHANGED
+    public enum MessageType {
+        TEXT,
+        SYSTEM
     }
+
+    public enum SystemEvent {
+        BOOK_ADDED,
+        SOLD_TO_BUYER,
+        SOLD_ELSEWHERE,
+        BOOK_UNAVAILABLE,
+        BOOK_AVAILABLE
+    }
+
+    public static final int MESSAGE_MAX_LENGTH = 2000;
+    public static final int MESSAGE_PREVIEW_LENGTH = 140;
+
 
     public record BookData(String title, String author, String description) {}
 

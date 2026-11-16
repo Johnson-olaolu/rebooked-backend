@@ -1,0 +1,53 @@
+<!DOCTYPE html>
+<html xmlns:th="http://www.thymeleaf.org" lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title th:text="${heading}">Rebooked</title>
+</head>
+<body style="margin:0;padding:0;background:#f5f3ef;font-family:Helvetica,Arial,sans-serif;color:#1f1f1f;">
+<table role="presentation" width="100%" cellpadding="0" cellspacing="0" style="background:#f5f3ef;padding:24px 12px;">
+    <tr>
+        <td align="center">
+            <table role="presentation" width="100%" cellpadding="0" cellspacing="0"
+                   style="max-width:560px;background:#ffffff;border-radius:12px;padding:32px;">
+                <tr>
+                    <td style="font-size:20px;font-weight:bold;color:#2f5d50;padding-bottom:24px;">Rebooked</td>
+                </tr>
+                <tr>
+                    <td style="font-size:22px;font-weight:bold;padding-bottom:16px;" th:text="${heading}">Heading</td>
+                </tr>
+                <tr>
+                    <td style="font-size:16px;line-height:24px;padding-bottom:12px;">Hi <span th:text="${name}">there</span>,</td>
+                </tr>
+                <tr th:each="line : ${lines}">
+                    <td style="font-size:16px;line-height:24px;padding-bottom:12px;" th:text="${line}">Body</td>
+                </tr>
+                <tr th:if="${quote != null}">
+                    <td style="padding:8px 0 16px;">
+                        <div style="border-left:4px solid #2f5d50;background:#f5f3ef;padding:12px 16px;font-size:15px;line-height:22px;font-style:italic;"
+                             th:text="${quote}">Quote</div>
+                    </td>
+                </tr>
+                <tr th:if="${ctaUrl != null}">
+                    <td style="padding:8px 0 24px;">
+                        <a th:href="${ctaUrl}" th:text="${ctaLabel}"
+                           style="display:inline-block;background:#2f5d50;color:#ffffff;text-decoration:none;font-weight:bold;padding:12px 24px;border-radius:8px;">Open</a>
+                    </td>
+                </tr>
+                <tr>
+                    <td style="font-size:12px;line-height:18px;color:#777777;border-top:1px solid #eeeeee;padding-top:16px;">
+                        <span th:if="${unsubscribeUrl != null}">
+                            You're getting this because of your Rebooked notification settings.
+                            <a th:href="${unsubscribeUrl}" style="color:#777777;">Unsubscribe from these emails</a>
+                            or <a th:href="${preferencesUrl}" style="color:#777777;">manage notifications</a>.
+                        </span>
+                        <span th:if="${unsubscribeUrl == null}">This is an account email from Rebooked.</span>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+</table>
+</body>
+</html>

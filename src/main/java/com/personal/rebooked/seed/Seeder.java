@@ -69,17 +69,22 @@ public class Seeder implements ApplicationRunner {
         expireLegacyEmailCodes();
         migrateBookLocations();
         migrateBookSlugs();
+        dropLegacyNotifications();
 //        seedBooks();
     }
 
+    /** Creates the super admin once, already verified. Never sends email. */
     private void seedSuperAdmin() {
-        try {
-            User user = userService.findUserByEmail(Constants.superAdminDetails.email());
-        } catch (Exception e) {
-            User user = userService.createUser(Constants.superAdminDetails);
-            logger.info(String.format("Super admin %s created", user.getFullName()));
+        String email = Constants.superAdminDetails.email();
+        if (userService.existsByEmail(email)) {
+            // Admins seeded before this change went through sign-up and were left unverified
+            mongoTemplate.updateFirst(new Query(Criteria.where("email").is(email).and("isEmailVerified").ne(true)),
+                    new Update().set("isEmailVerified", true).unset("confirmEmailToken").unset("confirmEmailTokenTTL"),
+                    User.class);
+            return;
         }
-
+        User user = userService.createSeededUser(Constants.superAdminDetails);
+        logger.info(String.format("Super admin %s created", user.getFullName()));
     }
 
     /**
@@ -164,6 +169,14 @@ public class Seeder implements ApplicationRunner {
             updated++;
         }
         if (updated > 0) logger.info("Backfilled slug on " + updated + " books");
+    }
+
+    /** The pre-#19 "notification" collection (DBRef model) is replaced by "notifications". */
+    private void dropLegacyNotifications() {
+        if (mongoTemplate.collectionExists("notification")) {
+            mongoTemplate.dropCollection("notification");
+            logger.info("Dropped the legacy notification collection");
+        }
     }
 
     private void seedCategories() {

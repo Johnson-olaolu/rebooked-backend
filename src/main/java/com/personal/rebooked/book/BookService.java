@@ -14,6 +14,9 @@ import com.personal.rebooked.exception.ApiException;
 import com.personal.rebooked.file.FileService;
 import com.personal.rebooked.file.models.File;
 import com.personal.rebooked.file.respositories.FileRepository;
+import com.personal.rebooked.notification.BookSnapshot;
+import com.personal.rebooked.notification.NotificationService;
+import com.personal.rebooked.notification.Notifications;
 import com.personal.rebooked.service.AiService;
 import com.personal.rebooked.service.RedisService;
 import com.personal.rebooked.user.models.User;
@@ -23,6 +26,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.bson.Document;
 import org.bson.types.ObjectId;
+import org.springframework.context.ApplicationEventPublisher;
 import org.springframework.data.domain.Sort;
 import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.aggregation.*;
@@ -56,6 +60,12 @@ public class BookService {
     private final MongoTemplate mongoTemplate;
     private final AiService aiService;
     private final RedisService redisService;
+    private final ApplicationEventPublisher events;
+    private final NotificationService notificationService;
+    private final Notifications notifications;
+
+    /** View counts that earn the seller a VIEWS_MILESTONE notification. */
+    private static final Set<Integer> VIEW_MILESTONES = Set.of(50, 100, 500, 1000);
 
     // ---------------------------------------------------------------- create / update
 
@@ -126,6 +136,7 @@ public class BookService {
             book.setSlug(uniqueSlug(book.getTitle()));
         }
         Book saved = bookRepository.save(book);
+        events.publishEvent(new BookChangedEvent(saved, BookChangedEvent.Kind.UPDATED, saved.getStatus()));
 
         Set<String> kept = new HashSet<>();
         filesOf(saved).forEach(f -> kept.add(f.getId()));
@@ -151,15 +162,23 @@ public class BookService {
             validateForPublish(book, errors);
             throwIfErrors(errors);
         }
+        Constants.BookStatus previous = book.getStatus();
         book.setSoldDate(target == Constants.BookStatus.SOLD ? new Date() : null);
+        // Sold from My shelf: no buyer known. Back to ACTIVE: no buyer any more.
+        if (target != previous) book.setBuyerId(null);
         book.setStatus(target);
-        return bookRepository.save(book);
+        Book saved = bookRepository.save(book);
+        if (target != previous) {
+            events.publishEvent(new BookChangedEvent(saved, BookChangedEvent.Kind.STATUS_CHANGED, previous));
+        }
+        return saved;
     }
 
     public void delete(User caller, String id) {
         Book book = findById(id);
         requireOwner(book, caller);
         bookRepository.delete(book);
+        events.publishEvent(new BookChangedEvent(book, BookChangedEvent.Kind.DELETED, book.getStatus()));
         // Photos no other book or profile uses go too
         for (File file : filesOf(book)) fileService.deleteIfUnused(file, caller.getId());
     }
@@ -610,6 +629,10 @@ public class BookService {
             redisService.save(key, 1, 1, TimeUnit.DAYS);
             book.setViewCount((book.getViewCount() == null ? 0 : book.getViewCount()) + 1);
             book = bookRepository.save(book);
+            if (VIEW_MILESTONES.contains(book.getViewCount()) && book.getUser() != null) {
+                notificationService.send(notifications.viewsMilestone(book.getUser().getId(),
+                        BookSnapshot.of(book), book.getViewCount()));
+            }
         }
         return book;
     }

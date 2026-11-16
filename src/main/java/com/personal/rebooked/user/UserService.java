@@ -13,7 +13,9 @@ import java.util.Objects;
 import com.personal.rebooked.exception.ApiException;
 import com.personal.rebooked.file.FileService;
 import com.personal.rebooked.file.models.File;
-import com.personal.rebooked.service.MailService;
+import com.personal.rebooked.notification.NotificationLinks;
+import com.personal.rebooked.notification.NotificationService;
+import com.personal.rebooked.notification.Notifications;
 import com.personal.rebooked.user.dto.AddressDTO;
 import com.personal.rebooked.user.dto.CreateUserDto;
 import com.personal.rebooked.user.dto.UpdateProfileDTO;
@@ -49,25 +51,32 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final AddressRepository addressRepository;
-    private final MailService mailService;
+    private final NotificationService notificationService;
+    private final Notifications notifications;
+    private final NotificationLinks notificationLinks;
     private final FileService fileService;
     private final ProfileRepository profileRepository;
     private final MongoTemplate mongoTemplate;
 
+    /** Email sign-up. The role and verified flag are never taken from the request. */
     public User createUser(CreateUserDto createUserDto) {
         User user = new User();
         user.setFullName(createUserDto.fullName());
-        user.setPassword(createUserDto.password());
         user.setEmail(createUserDto.email());
-        user.setRole(createUserDto.roleName());
+        user.setRole(Constants.ROLE_USER);
         user.setPassword(createUserDto.password());
         user.setRegistrationType(Constants.RegistrationType.EMAIL);
-        User userWithEmail = sendConfirmEmailToken(user);
         Profile profile = new Profile();
         profile.setProfilePictureUrl(createUserDto.profilePictureUrl());
-        Profile savedProfile = profileRepository.save(profile);
-        user.setProfile(savedProfile);
-        return userRepository.save(userWithEmail);
+        user.setProfile(profileRepository.save(profile));
+        User saved = userRepository.save(user);
+        try {
+            return sendConfirmEmailToken(saved);
+        } catch (ApiException e) {
+            // The account exists; the user can ask for the code again from the verify screen
+            log.warn("Verification email for new user {} failed: {}", saved.getId(), e.getMessage());
+            return userRepository.findById(saved.getId()).orElse(saved);
+        }
     }
 
     public User createUserOauth(CreateUserDto createUserDto, Constants.RegistrationType registrationType) {
@@ -75,7 +84,7 @@ public class UserService {
         user.setFullName(createUserDto.fullName());
         user.setPassword(createUserDto.password());
         user.setEmail(createUserDto.email());
-        user.setRole(createUserDto.roleName());
+        user.setRole(Constants.ROLE_USER);
         user.setRegistrationType(registrationType);
         user.setEmailVerified(true);
         Profile profile = new Profile();
@@ -85,12 +94,35 @@ public class UserService {
         return userRepository.save(user);
     }
 
+    /**
+     * Accounts the app creates for itself (the super admin): role and verified flag come from the DTO,
+     * and no confirmation email is sent. Never call this with client input.
+     */
+    public User createSeededUser(CreateUserDto createUserDto) {
+        User user = new User();
+        user.setFullName(createUserDto.fullName());
+        user.setEmail(createUserDto.email());
+        user.setPassword(createUserDto.password());
+        user.setRole(createUserDto.roleName());
+        user.setRegistrationType(Constants.RegistrationType.EMAIL);
+        user.setEmailVerified(createUserDto.isVerified());
+        Profile profile = new Profile();
+        profile.setProfilePictureUrl(createUserDto.profilePictureUrl());
+        user.setProfile(profileRepository.save(profile));
+        return userRepository.save(user);
+    }
+
+    public boolean existsByEmail(String email) {
+        return userRepository.existsByEmail(email);
+    }
+
     public User sendConfirmEmailToken(User user) {
         String confirmEmailToken = Misc.getToken();
         user.setConfirmEmailToken(confirmEmailToken);
         user.setConfirmEmailTokenTTL(LocalDateTime.now().plusMinutes(Constants.EMAIL_CODE_TTL_MINUTES));
-        mailService.sendConfirmEmailMail(user);
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        notificationService.send(notifications.emailVerification(saved));
+        return saved;
     }
 
     public User confirmEmail(User user, String token) {
@@ -98,7 +130,9 @@ public class UserService {
             user.setConfirmEmailToken(null);
             user.setConfirmEmailTokenTTL(null);
             user.setEmailVerified(true);
-            return userRepository.save(user);
+            User saved = userRepository.save(user);
+            notificationService.send(notifications.welcome(saved));
+            return saved;
         } else {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid or expired code");
         }
@@ -108,8 +142,10 @@ public class UserService {
         String changePasswordToken = Misc.getToken();
         user.setChangePasswordToken(changePasswordToken);
         user.setChangePasswordTokenTTL(LocalDateTime.now().plusMinutes(Constants.EMAIL_CODE_TTL_MINUTES));
-        mailService.sendChangepasswordMail(user);
-        return userRepository.save(user);
+        User saved = userRepository.save(user);
+        notificationService.send(notifications.passwordReset(saved,
+                notificationLinks.changePassword(saved.getEmail(), changePasswordToken)));
+        return saved;
     }
 
     public User changePassword(User user, String token, String password) {
@@ -117,7 +153,14 @@ public class UserService {
             user.setChangePasswordToken(null);
             user.setChangePasswordTokenTTL(null);
             user.setPassword(password);
-            return userRepository.save(user);
+            User saved = userRepository.save(user);
+            try {
+                notificationService.send(notifications.passwordChanged(saved));
+            } catch (ApiException e) {
+                // The password did change; a missing notice email shouldn't undo that
+                log.warn("Password-changed email for {} failed: {}", saved.getId(), e.getMessage());
+            }
+            return saved;
         } else {
             throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid or expired code");
         }

@@ -11,6 +11,9 @@ public interface UserRepository extends MongoRepository<User, String> {
     @Query("{ 'email': ?0, 'isDeleted': false }")
     Optional<User> findByEmail(String email);
 
+    /** Includes deleted accounts: the email stays taken (unique index). */
+    boolean existsByEmail(String email);
+
     @Override
     @Query("{ '_id': ?0, 'isDeleted': false }")
     Optional<User> findById(String id);

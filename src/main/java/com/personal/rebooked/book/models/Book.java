@@ -79,6 +79,10 @@ public class Book {
 
     private Date soldDate;
 
+    /** Who bought it through chat. Cleared when the book goes back to ACTIVE. Never in responses. */
+    @JsonIgnore
+    private String buyerId;
+
     @CreatedDate
     private Date createdAt;
 
