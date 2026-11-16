@@ -70,6 +70,7 @@ public class Seeder implements ApplicationRunner {
         migrateBookLocations();
         migrateBookSlugs();
         dropLegacyNotifications();
+        defaultViewCounts();
 //        seedBooks();
     }
 
@@ -177,6 +178,13 @@ public class Seeder implements ApplicationRunner {
             mongoTemplate.dropCollection("notification");
             logger.info("Dropped the legacy notification collection");
         }
+    }
+
+    /** The view flush uses $inc, which fails on a null field: give books without a count a 0. */
+    private void defaultViewCounts() {
+        long updated = mongoTemplate.getCollection("book")
+                .updateMany(Filters.eq("viewCount", null), Updates.set("viewCount", 0)).getModifiedCount();
+        if (updated > 0) logger.info("Set viewCount to 0 on " + updated + " books");
     }
 
     private void seedCategories() {

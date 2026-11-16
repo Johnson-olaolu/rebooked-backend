@@ -65,7 +65,6 @@ public class BookService {
     private final Notifications notifications;
 
     /** View counts that earn the seller a VIEWS_MILESTONE notification. */
-    private static final Set<Integer> VIEW_MILESTONES = Set.of(50, 100, 500, 1000);
 
     // ---------------------------------------------------------------- create / update
 
@@ -619,22 +618,26 @@ public class BookService {
     }
 
     /** Counts at most one view per viewer per book per day, and only for ACTIVE books. */
-    public Book viewed(String id, String viewerKey) {
-        Book book = findById(id);
-        if (book.getStatus() != Constants.BookStatus.ACTIVE) {
-            throw new ResponseStatusException(HttpStatus.NOT_FOUND, "Book not found");
+    /** One query for the books, in the order of {@code ids}; unknown ids are dropped. */
+    public List<Book> booksInOrder(List<String> ids) {
+        List<String> valid = ids.stream().filter(BookService::isObjectId).toList();
+        if (valid.isEmpty()) return List.of();
+        Map<String, Book> byId = new HashMap<>();
+        for (Book book : bookRepository.findAllById(valid)) byId.put(book.getId(), book);
+        List<Book> ordered = new ArrayList<>();
+        for (String id : valid) {
+            Book book = byId.get(id);
+            if (book != null) ordered.add(book);
         }
-        String key = "view:" + id + ":" + viewerKey;
-        if (!redisService.exists(key)) {
-            redisService.save(key, 1, 1, TimeUnit.DAYS);
-            book.setViewCount((book.getViewCount() == null ? 0 : book.getViewCount()) + 1);
-            book = bookRepository.save(book);
-            if (VIEW_MILESTONES.contains(book.getViewCount()) && book.getUser() != null) {
-                notificationService.send(notifications.viewsMilestone(book.getUser().getId(),
-                        BookSnapshot.of(book), book.getViewCount()));
-            }
-        }
-        return book;
+        return ordered;
+    }
+
+    /** GET /book/recently-viewed: newest first; ACTIVE and SOLD books only, never the viewer's own. */
+    public List<Book> recentlyViewed(User viewer, List<String> ids) {
+        return booksInOrder(ids).stream()
+                .filter(b -> b.getStatus() == Constants.BookStatus.ACTIVE || b.getStatus() == Constants.BookStatus.SOLD)
+                .filter(b -> b.getUser() == null || !viewer.getId().equals(b.getUser().getId()))
+                .toList();
     }
 
     @SuppressWarnings("unchecked")

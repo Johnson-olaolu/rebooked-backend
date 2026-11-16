@@ -77,7 +77,7 @@ Code: `src/main/java/com/personal/rebooked/notification/`.
 |---|---|---|---|---|---|---|---|---|
 | `STALE_LISTING` 🧠 | No enquiries in 30 days, with tips (photo, description, price) | Daily job: `ACTIVE`, listed 30+ days ago, no `BOOK_ENQUIRY` in the last 30 days. At most once a month per book | Seller | ✅ | ✅ | | | Yes |
 | `DRAFT_REMINDER` 🧠 | Your draft is waiting to be published | Daily job: a `DRAFT` not updated for 3 days. Once per draft | Seller | ✅ | ✅ | | | Yes |
-| `VIEWS_MILESTONE` 🧠 | "Your book has had 100 views" | A book's view count reaches 50, 100, 500 or 1000. Once per milestone | Seller | ✅ | | | | Yes |
+| `VIEWS_MILESTONE` 🧠 | "Your book has had 100 views" | A book's view count reaches 50, 100, 500 or 1000. Checked when views are flushed from Redis to Mongo (every 5 min, `views.flush-interval`), so it can arrive up to 5 minutes late. Once per milestone | Seller | ✅ | | | | Yes |
 
 🧠 = smart notification: worked out from behaviour (time passing, silence, milestones) rather than sent straight away by an action.
 
@@ -92,6 +92,7 @@ All of these are in `NotificationJobs`. Each carries a `dedupeKey`, so re-runnin
 | Mark-as-sold nudges | Daily | `NUDGE:<bookId>:<yyyy-MM>` |
 | Onboarding reminders | Daily | `ONBOARD:<userId>` |
 | Retention: delete read in-app notifications older than 90 days | Daily | — |
+| Views milestones (`ViewFlushJob`) | Every 5 min, with the view flush | `VIEWS:<bookId>:<milestone>` |
 
 ## Planned
 - **Push and WhatsApp channels:** good first candidates are `BOOK_ENQUIRY`, `UNREPLIED_MESSAGE` and `SOLD_TO_YOU`.

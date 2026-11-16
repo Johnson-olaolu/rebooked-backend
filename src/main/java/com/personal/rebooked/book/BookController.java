@@ -2,6 +2,9 @@ package com.personal.rebooked.book;
 
 import com.personal.rebooked.book.dto.*;
 import com.personal.rebooked.book.models.Book;
+import com.personal.rebooked.book.saved.SavedBookService;
+import com.personal.rebooked.book.saved.SavedBooksPage;
+import com.personal.rebooked.book.views.BookViews;
 import com.personal.rebooked.security.CurrentUser;
 import com.personal.rebooked.user.models.User;
 import com.personal.rebooked.utils.Constants;
@@ -17,6 +20,7 @@ import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.*;
 
 import java.util.List;
+import java.util.Map;
 
 @RequiredArgsConstructor
 @RequestMapping("/book")
@@ -24,6 +28,8 @@ import java.util.List;
 @SecurityRequirement(name = "bearerAuth")
 public class BookController {
     private final BookService bookService;
+    private final BookViews bookViews;
+    private final SavedBookService savedBookService;
 
     @PostMapping
     public ResponseEntity<Object> createBook(@RequestBody @Valid CreateBookDto createBookDto) {
@@ -92,13 +98,50 @@ public class BookController {
         return ResponseHandler.generateResponse(book, "Book updated successfully");
     }
 
+    /** Counts a view (once a day per viewer) and adds the book to the viewer's recently viewed. No body. */
     @PatchMapping("/{bookId}/view")
     public ResponseEntity<Object> viewBook(@PathVariable String bookId, HttpServletRequest request) {
-        String viewer = CurrentUser.optional()
-                .map(u -> "user:" + u.getId())
-                .orElseGet(() -> "ip:" + clientIp(request));
-        Book book = bookService.viewed(bookId, viewer);
-        return ResponseHandler.generateResponse(book, "Book updated successfully");
+        String userId = CurrentUser.optional().map(User::getId).orElse(null);
+        bookViews.record(bookId, userId, clientIp(request));
+        return ResponseHandler.generateResponse(null, "View recorded");
+    }
+
+    @GetMapping("/recently-viewed")
+    public ResponseEntity<Object> recentlyViewed() {
+        User me = CurrentUser.require();
+        List<Book> books = bookService.recentlyViewed(me, bookViews.recentIds(me.getId()));
+        return ResponseHandler.generateResponse(books, "Books fetched successfully");
+    }
+
+    @DeleteMapping("/recently-viewed")
+    public ResponseEntity<Object> clearRecentlyViewed() {
+        bookViews.clearRecents(CurrentUser.require().getId());
+        return ResponseHandler.generateResponse(null, "Recently viewed cleared");
+    }
+
+    @PutMapping("/{id}/save")
+    public ResponseEntity<Object> saveBook(@PathVariable String id) {
+        savedBookService.save(CurrentUser.require().getId(), id);
+        return ResponseHandler.generateResponse(Map.of("saved", true), "Book saved");
+    }
+
+    @DeleteMapping("/{id}/save")
+    public ResponseEntity<Object> unsaveBook(@PathVariable String id) {
+        savedBookService.unsave(CurrentUser.require().getId(), id);
+        return ResponseHandler.generateResponse(Map.of("saved", false), "Book removed from saved");
+    }
+
+    @GetMapping("/saved")
+    public ResponseEntity<Object> savedBooks(@RequestParam(required = false) Integer page,
+                                             @RequestParam(required = false) Integer pageSize) {
+        SavedBooksPage saved = savedBookService.list(CurrentUser.require().getId(), page, pageSize);
+        return ResponseHandler.generateResponse(saved, "Books fetched successfully");
+    }
+
+    @GetMapping("/saved/ids")
+    public ResponseEntity<Object> savedBookIds() {
+        List<String> ids = savedBookService.ids(CurrentUser.require().getId());
+        return ResponseHandler.generateResponse(ids, "Saved book ids fetched successfully");
     }
 
     @PostMapping("/{id}/status")

@@ -11,7 +11,12 @@ services:
       - rebooked
 
   redis:
-    image: redis:latest
+    image: redis:7
+    # AOF every second: a crash loses at most 1 s of views. volatile-lru only evicts keys with an
+    # expiry, so views:pending and recent:dirty are never evicted (see API_CHANGES.md #21e)
+    command: ["redis-server", "--appendonly", "yes", "--appendfsync", "everysec", "--maxmemory", "256mb", "--maxmemory-policy", "volatile-lru"]
+    volumes:
+      - redis-data:/data
     ports:
       - '6379:6379'
     networks:
@@ -23,3 +28,4 @@ networks:
 
 volumes:
   db:
+  redis-data:

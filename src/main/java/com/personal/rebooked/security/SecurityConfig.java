@@ -83,6 +83,8 @@ public class SecurityConfig {
                             .requestMatchers(HttpMethod.GET, "/user/*").permitAll()
                             .requestMatchers("/marketing/**").permitAll()
                             .requestMatchers("/book/me").authenticated()
+                            // Per-user lists; must win over the public GET /book/* rule below
+                            .requestMatchers("/book/saved", "/book/saved/**", "/book/recently-viewed").authenticated()
                             .requestMatchers("/book/*/view").permitAll()
                             .requestMatchers("/book/ai-picks").permitAll()
                             .requestMatchers("/book/most-viewed").permitAll()
