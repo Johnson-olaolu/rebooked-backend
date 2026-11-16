@@ -14,6 +14,7 @@ import com.personal.rebooked.utils.Constants;
 import lombok.RequiredArgsConstructor;
 import org.springframework.http.HttpStatus;
 import org.springframework.security.authentication.BadCredentialsException;
+import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.web.server.ResponseStatusException;
 
@@ -31,9 +32,13 @@ public class AuthService {
     private final FacebookVerificationService facebookVerificationService;
     private final RefreshTokenService refreshTokenService;
     private final RedisService redisService;
+    private final BCryptPasswordEncoder passwordEncoder;
 
     private static final String CONFIRM_EMAIL_LIMIT = "confirm-email";
     private static final String FORGOT_PASSWORD_LIMIT = "forgot-password";
+    private static final String CHANGE_PASSWORD_LIMIT = "ratelimit:change-password:";
+    private static final int CHANGE_PASSWORD_MAX_ATTEMPTS = 5;
+    private static final long CHANGE_PASSWORD_WINDOW_MINUTES = 15;
 
 
     public LoginResponseDTO register(CreateUserDto createUserDto) {
@@ -167,15 +172,64 @@ public class AuthService {
         return userService.confirmEmail(user, confirmEmailDTO.token());
     }
 
-    public User sendForgotPasswordMail(ForgotPasswordDTO forgotPasswordDTO) {
+    /**
+     * Sends the reset email. An unknown email gets the same 200 (and the same cooldown),
+     * so the endpoint doesn't reveal which emails are registered.
+     */
+    public void sendForgotPasswordMail(ForgotPasswordDTO forgotPasswordDTO) {
         checkCooldown(FORGOT_PASSWORD_LIMIT, forgotPasswordDTO.email());
-        User user = userService.findUserByEmail(forgotPasswordDTO.email());
         startCooldown(FORGOT_PASSWORD_LIMIT, forgotPasswordDTO.email());
-        return userService.sendChangePasswordToken(user);
+        userService.findByEmail(forgotPasswordDTO.email())
+                .ifPresent(userService::sendChangePasswordToken);
     }
 
+    /** Sets a new password from the reset link, then signs the user out of every device. */
     public User changePassword(ChangePasswordDTO changePasswordDTO) {
-        User user = userService.findUserByEmail(changePasswordDTO.email());
-        return userService.changePassword(user, changePasswordDTO.token(), changePasswordDTO.password());
+        // An unknown email gets the same answer as a wrong code
+        User user = userService.findByEmail(changePasswordDTO.email())
+                .orElseThrow(UserService::invalidCode);
+        User saved = userService.changePassword(user, changePasswordDTO.token(), changePasswordDTO.password());
+        refreshTokenService.revokeAll(saved.getId());
+        return saved;
+    }
+
+    /**
+     * Settings → Password for a logged-in user. Wrong current passwords are limited to
+     * 5 every 15 minutes per user. On success every other device is signed out and this
+     * session gets a new token pair.
+     */
+    public LoginResponseDTO updatePassword(User currentUser, UpdatePasswordDTO dto) {
+        User user = userService.findUserById(currentUser.getId());
+        if (user.getRegistrationType() != Constants.RegistrationType.EMAIL) {
+            String provider = capitalize(user.getRegistrationType().name());
+            throw new ApiException(HttpStatus.BAD_REQUEST, "You sign in with " + provider,
+                    Map.of("currentPassword", "You sign in with " + provider + ", so there's no password to change"));
+        }
+
+        String attemptsKey = CHANGE_PASSWORD_LIMIT + user.getId();
+        Object attempts = redisService.get(attemptsKey);
+        if (attempts != null && Long.parseLong(attempts.toString()) >= CHANGE_PASSWORD_MAX_ATTEMPTS) {
+            throw new ApiException(HttpStatus.TOO_MANY_REQUESTS,
+                    "Too many wrong attempts. Try again in 15 minutes, or reset your password by email.");
+        }
+        if (!passwordEncoder.matches(dto.currentPassword(), user.getPassword())) {
+            redisService.increment(attemptsKey, CHANGE_PASSWORD_WINDOW_MINUTES, TimeUnit.MINUTES);
+            throw new ApiException(HttpStatus.BAD_REQUEST, "That's not your current password",
+                    Map.of("currentPassword", "That's not your current password"));
+        }
+        if (passwordEncoder.matches(dto.newPassword(), user.getPassword())) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Choose a password you're not using now",
+                    Map.of("newPassword", "Choose a password you're not using now"));
+        }
+
+        redisService.delete(attemptsKey);
+        User saved = userService.setPassword(user, dto.newPassword());
+        refreshTokenService.revokeAll(saved.getId());
+        return loginUser(saved);
+    }
+
+    private static String capitalize(String value) {
+        String lower = value.toLowerCase();
+        return Character.toUpperCase(lower.charAt(0)) + lower.substring(1);
     }
 }

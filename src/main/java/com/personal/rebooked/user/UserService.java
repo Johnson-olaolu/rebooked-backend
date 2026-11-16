@@ -134,7 +134,7 @@ public class UserService {
             notificationService.send(notifications.welcome(saved));
             return saved;
         } else {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid or expired code");
+            throw invalidCode();
         }
     }
 
@@ -152,18 +152,29 @@ public class UserService {
         if (isValidCode(user.getChangePasswordToken(), user.getChangePasswordTokenTTL(), token)) {
             user.setChangePasswordToken(null);
             user.setChangePasswordTokenTTL(null);
-            user.setPassword(password);
-            User saved = userRepository.save(user);
-            try {
-                notificationService.send(notifications.passwordChanged(saved));
-            } catch (ApiException e) {
-                // The password did change; a missing notice email shouldn't undo that
-                log.warn("Password-changed email for {} failed: {}", saved.getId(), e.getMessage());
-            }
-            return saved;
+            return setPassword(user, password);
         } else {
-            throw new ApiException(HttpStatus.BAD_REQUEST, "Invalid or expired code");
+            throw invalidCode();
         }
+    }
+
+    /** Saves a new password (hashed by UserModelListener) and sends the mandatory PASSWORD_CHANGED email. */
+    public User setPassword(User user, String password) {
+        user.setPassword(password);
+        User saved = userRepository.save(user);
+        try {
+            notificationService.send(notifications.passwordChanged(saved));
+        } catch (ApiException e) {
+            // The password did change; a missing notice email shouldn't undo that
+            log.warn("Password-changed email for {} failed: {}", saved.getId(), e.getMessage());
+        }
+        return saved;
+    }
+
+    /** 400 with errors.token, so the page can tell a bad code apart from a password-rule error. */
+    public static ApiException invalidCode() {
+        return new ApiException(HttpStatus.BAD_REQUEST, "Invalid or expired code",
+                Map.of("token", "Invalid or expired code"));
     }
 
     private boolean isValidCode(String storedCode, LocalDateTime expiresAt, String submittedCode) {
@@ -179,6 +190,10 @@ public class UserService {
 
     public User findUserByEmail(String email) {
         return userRepository.findByEmail(email).orElseThrow(() -> new ResponseStatusException(HttpStatus.NOT_FOUND));
+    }
+
+    public java.util.Optional<User> findByEmail(String email) {
+        return userRepository.findByEmail(email);
     }
 
     public List<User> getAllUsers() {

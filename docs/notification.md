@@ -52,7 +52,7 @@ Code: `src/main/java/com/personal/rebooked/notification/`.
 |---|---|---|---|---|---|---|---|---|
 | `EMAIL_VERIFICATION` | 6-digit code to confirm the email address | Sign-up, or "resend code" | The new user | | ✅ | | | 🔒 |
 | `PASSWORD_RESET` | Link to choose a new password | Forgot password | The user | | ✅ | | | 🔒 |
-| `PASSWORD_CHANGED` | Security notice that the password changed | Password reset completed | The user | | ✅ | | | 🔒 |
+| `PASSWORD_CHANGED` | Security notice that the password changed | Password reset completed, or changed from Settings (`POST /auth/change-password`) | The user | | ✅ | | | 🔒 |
 | `WELCOME` | Welcome, with a link to finish the profile | Email confirmed | The user | ✅ | ✅ | | | Yes |
 | `ONBOARDING_REMINDER` 🧠 | Nudge to add a display name and city | Daily job: verified, signed up 1–14 days ago, onboarding not finished. Once per user | The user | | ✅ | | | Yes |
 

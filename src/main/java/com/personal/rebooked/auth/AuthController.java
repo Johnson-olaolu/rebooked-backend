@@ -1,6 +1,7 @@
 package com.personal.rebooked.auth;
 
 import com.personal.rebooked.auth.dto.*;
+import com.personal.rebooked.security.CurrentUser;
 import com.personal.rebooked.user.dto.CreateUserDto;
 import com.personal.rebooked.user.models.User;
 import com.personal.rebooked.user.privacy.AddressPrivacy;
@@ -122,7 +123,8 @@ public class AuthController {
     @GetMapping("/forgot-password")
     public ResponseEntity<Object> sendForgotPasswordMail(@ParameterObject @ModelAttribute @Valid ForgotPasswordDTO forgotPasswordDTO) {
         authService.sendForgotPasswordMail(forgotPasswordDTO);
-        return ResponseHandler.generateResponse(null, "Email sent successfully");
+        // Same answer whether or not the email has an account
+        return ResponseHandler.generateResponse(null, "If that email has an account, a reset link is on its way");
     }
 
     @ApiResponses({
@@ -134,5 +136,18 @@ public class AuthController {
         AddressPrivacy.showOwnerFields(); // response is about the caller
         User user = authService.changePassword(changePasswordDTO);
         return ResponseHandler.generateResponse(user, "Password changed successfully");
+    }
+
+    @ApiResponses({
+            @ApiResponse(responseCode = "200", content = @Content(schema = @Schema(implementation = ApiResponseDocs.AuthResponse.class))),
+            @ApiResponse(responseCode = "400", content = @Content(schema = @Schema(implementation = ApiResponseDocs.ErrorResponse.class))),
+            @ApiResponse(responseCode = "429", content = @Content(schema = @Schema(implementation = ApiResponseDocs.ErrorResponse.class)))
+    })
+    @PostMapping("/change-password")
+    public ResponseEntity<Object> updatePassword(@RequestBody @Valid UpdatePasswordDTO updatePasswordDTO) {
+        User currentUser = CurrentUser.require();
+        AddressPrivacy.showOwnerFields(); // response is about the caller
+        LoginResponseDTO loginResponseDTO = authService.updatePassword(currentUser, updatePasswordDTO);
+        return ResponseHandler.generateResponse(loginResponseDTO, "Password changed successfully");
     }
 }

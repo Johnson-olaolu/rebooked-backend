@@ -71,6 +71,8 @@ public class SecurityConfig {
                     authorizeRequests
                             .requestMatchers("/").permitAll()
                             .requestMatchers("/error").permitAll()
+                            // Settings → Password needs the session; must win over /auth/** below
+                            .requestMatchers(HttpMethod.POST, "/auth/change-password").authenticated()
                             .requestMatchers("/auth/**").permitAll()
                             // The socket authenticates on STOMP CONNECT (StompAuthInterceptor)
                             .requestMatchers("/ws/**").permitAll()
