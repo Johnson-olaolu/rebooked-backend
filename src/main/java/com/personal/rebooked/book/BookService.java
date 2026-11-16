@@ -63,6 +63,7 @@ public class BookService {
     private final ApplicationEventPublisher events;
     private final NotificationService notificationService;
     private final Notifications notifications;
+    private final com.personal.rebooked.conversation.ConversationService conversationService;
 
     /** View counts that earn the seller a VIEWS_MILESTONE notification. */
 
@@ -161,9 +162,11 @@ public class BookService {
             validateForPublish(book, errors);
             throwIfErrors(errors);
         }
+        if (target == Constants.BookStatus.SOLD) return markSold(caller, book, dto.buyerId());
+
         Constants.BookStatus previous = book.getStatus();
-        book.setSoldDate(target == Constants.BookStatus.SOLD ? new Date() : null);
-        // Sold from My shelf: no buyer known. Back to ACTIVE: no buyer any more.
+        book.setSoldDate(null);
+        // Leaving SOLD (e.g. back to ACTIVE): no buyer any more
         if (target != previous) book.setBuyerId(null);
         book.setStatus(target);
         Book saved = bookRepository.save(book);
@@ -171,6 +174,33 @@ public class BookService {
             events.publishEvent(new BookChangedEvent(saved, BookChangedEvent.Kind.STATUS_CHANGED, previous));
         }
         return saved;
+    }
+
+    /**
+     * SOLD always names the buyer: someone who chatted with the seller about this book.
+     * Does exactly what the chat's "Mark as sold to X" does.
+     */
+    private Book markSold(User caller, Book book, String buyerId) {
+        if (buyerId == null || buyerId.isBlank()) {
+            throw new ApiException(HttpStatus.BAD_REQUEST, "Choose who bought it", Map.of("buyerId", "Choose who bought it"));
+        }
+        if (book.getStatus() == Constants.BookStatus.SOLD && buyerId.equals(book.getBuyerId())) return book; // a retry
+        var conversation = conversationService.sellableConversation(book.getId(), caller.getId(), buyerId)
+                .orElseThrow(() -> new ApiException(HttpStatus.BAD_REQUEST, "Pick someone who chatted with you about this book",
+                        Map.of("buyerId", "Pick someone who chatted with you about this book")));
+        if (conversationService.markSoldTo(book, conversation, caller.getId()) == null) {
+            String message = book.getStatus() == Constants.BookStatus.SOLD ? "This book is already sold"
+                    : "Only a published book can be marked as sold";
+            throw new ApiException(HttpStatus.BAD_REQUEST, message, Map.of("status", message));
+        }
+        return findById(book.getId());
+    }
+
+    /** GET /book/{id}/chat-buyers: only the seller. */
+    public List<com.personal.rebooked.conversation.dto.ChatBuyer> chatBuyers(User caller, String id) {
+        Book book = findById(id);
+        requireOwner(book, caller);
+        return conversationService.chatBuyers(id);
     }
 
     public void delete(User caller, String id) {

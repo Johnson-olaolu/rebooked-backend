@@ -54,6 +54,9 @@ public class ConversationService {
     private static final int DEFAULT_MESSAGE_LIMIT = 30;
     private static final int MAX_MESSAGE_LIMIT = 50;
     private static final List<String> FILTERS = List.of("ALL", "UNREAD", "SELLING", "BUYING");
+    /** Entry states whose buyer the seller can mark the book as sold to. */
+    private static final Set<ConversationBookState> SELLABLE_STATES =
+            EnumSet.of(ConversationBookState.OPEN, ConversationBookState.UNAVAILABLE);
 
     private final ConversationRepository conversationRepository;
     private final MessageRepository messageRepository;
@@ -64,6 +67,7 @@ public class ConversationService {
     private final NotificationService notificationService;
     private final Notifications notifications;
     private final InAppNotifications inAppNotifications;
+    private final com.personal.rebooked.user.repositories.UserRepository userRepository;
 
     /** Retries are matched on { senderId, clientId }; only TEXT messages carry a clientId. */
     @PostConstruct
@@ -180,31 +184,80 @@ public class ConversationService {
         if (book.getStatus() == Constants.BookStatus.SOLD && buyerId.equals(book.getBuyerId())) {
             return views.of(conversation, me); // a retry
         }
+        Conversation updated = markSoldTo(book, conversation, me);
+        if (updated == null) {
+            throw new ChatException(ChatException.Code.BOOK_NOT_AVAILABLE, "This book is no longer available");
+        }
+        return views.of(updated, me);
+    }
 
+    /**
+     * Marks the book as sold to the other participant of {@code conversation}, from the chat or from
+     * My shelf. That conversation goes to SOLD_TO_BUYER (SOLD_TO_YOU and RATE_SELLER for the buyer);
+     * every other open entry for the book goes to SOLD_ELSEWHERE. Returns null if the book can no
+     * longer be sold (it isn't ACTIVE or INACTIVE).
+     */
+    public Conversation markSoldTo(Book book, Conversation conversation, String sellerId) {
+        String bookId = book.getId();
+        String buyerId = conversation.otherParticipant(sellerId);
         List<Constants.BookStatus> sellable = List.of(Constants.BookStatus.ACTIVE, Constants.BookStatus.INACTIVE);
         UpdateResult sold = mongoTemplate.updateFirst(
                 query(where("_id").is(bookId).and("status").in(sellable)),
                 new Update().set("status", Constants.BookStatus.SOLD).set("soldDate", new Date())
                         .set("buyerId", buyerId).set("updatedAt", new Date()),
                 Book.class);
-        if (sold.getModifiedCount() == 0) {
-            throw new ChatException(ChatException.Code.BOOK_NOT_AVAILABLE, "This book is no longer available");
-        }
+        if (sold.getModifiedCount() == 0) return null;
 
-        conversation = changeState(conversation, bookId, ConversationBookState.SOLD_TO_BUYER, SystemEvent.SOLD_TO_BUYER, me);
-        notificationService.send(notifications.soldToYou(buyerId, me,
-                Notifications.snapshot(conversation.book(bookId).orElse(null)), conversation.getId()));
+        conversation = changeState(conversation, bookId, ConversationBookState.SOLD_TO_BUYER, SystemEvent.SOLD_TO_BUYER, sellerId);
+        var snapshot = Notifications.snapshot(conversation.book(bookId).orElse(null));
+        notificationService.send(notifications.soldToYou(buyerId, sellerId, snapshot, conversation.getId()));
         for (Conversation other : conversationRepository.findByBooksBookId(bookId)) {
             if (other.getId().equals(conversation.getId())) continue;
             ConversationBook entry = other.book(bookId).orElse(null);
             ConversationBookState state = entry != null ? entry.getState() : null;
             if (state == ConversationBookState.OPEN || state == ConversationBookState.UNAVAILABLE) {
-                changeState(other, bookId, ConversationBookState.SOLD_ELSEWHERE, SystemEvent.SOLD_ELSEWHERE, me);
-                notificationService.send(notifications.soldElsewhere(entry.getBuyerId(), me,
+                changeState(other, bookId, ConversationBookState.SOLD_ELSEWHERE, SystemEvent.SOLD_ELSEWHERE, sellerId);
+                notificationService.send(notifications.soldElsewhere(entry.getBuyerId(), sellerId,
                         Notifications.snapshot(entry), other.getId()));
             }
         }
-        return views.of(conversation, me);
+        // With the book's slug, so the email can link to it
+        notificationService.send(notifications.rateSeller(buyerId, sellerId,
+                Notifications.snapshot(bookRepository.findById(bookId).orElse(book)), conversation.getId()));
+        return conversation;
+    }
+
+    /**
+     * GET /book/{id}/chat-buyers: who the seller can mark the book as sold to. The buyers with this
+     * book OPEN or UNAVAILABLE in a conversation, most recent first.
+     */
+    public List<ChatBuyer> chatBuyers(String bookId) {
+        List<ChatBuyer> buyers = new ArrayList<>();
+        for (Conversation conversation : conversationRepository.findByBooksBookId(bookId)) {
+            ConversationBook entry = conversation.book(bookId).orElse(null);
+            if (entry == null || !SELLABLE_STATES.contains(entry.getState()) || entry.getBuyerId() == null) continue;
+            Date last = entry.getLastMessageAt() != null ? entry.getLastMessageAt() : entry.getAddedAt();
+            buyers.add(new ChatBuyer(entry.getBuyerId(), null, null, conversation.getId(), last));
+        }
+        Map<String, com.personal.rebooked.user.models.User> users = new HashMap<>();
+        userRepository.findAllById(buyers.stream().map(ChatBuyer::userId).filter(ObjectId::isValid).toList())
+                .forEach(u -> users.put(u.getId(), u));
+        return buyers.stream()
+                .filter(b -> users.containsKey(b.userId()))
+                .map(b -> {
+                    var profile = users.get(b.userId()).getProfile();
+                    return new ChatBuyer(b.userId(), profile != null ? profile.getUserName() : null,
+                            profile != null ? profile.getProfilePictureUrl() : null, b.conversationId(), b.lastMessageAt());
+                })
+                .sorted(Comparator.comparing(ChatBuyer::lastMessageAt, Comparator.nullsLast(Comparator.reverseOrder())))
+                .toList();
+    }
+
+    /** The conversation in which {@code buyerId} can be named as the buyer of this book, if any. */
+    public Optional<Conversation> sellableConversation(String bookId, String sellerId, String buyerId) {
+        return conversationRepository.findByPairKey(Conversation.pairKey(sellerId, buyerId))
+                .filter(c -> c.book(bookId).map(e -> SELLABLE_STATES.contains(e.getState())
+                        && buyerId.equals(e.getBuyerId())).orElse(false));
     }
 
     // ---------------------------------------------------------------- book changes from My shelf (18d)

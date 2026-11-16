@@ -29,6 +29,8 @@ public enum NotificationType {
     BOOK_UNAVAILABLE(Category.SALES, false, IN_APP),
     BOOK_AVAILABLE(Category.SALES, false, IN_APP, EMAIL),
     MARK_AS_SOLD_NUDGE(Category.SALES, false, IN_APP, EMAIL),
+    /** Ask the buyer to rate the seller. The 3-day reminder is the same type, email only. */
+    RATE_SELLER(Category.SALES, false, IN_APP, EMAIL),
 
     // Listings
     STALE_LISTING(Category.LISTINGS, false, IN_APP, EMAIL),

@@ -42,6 +42,7 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDateTime;
 import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Date;
 import java.util.Map;
 
 @Slf4j
@@ -209,14 +210,37 @@ public class UserService {
         return userRepository.save(user);
     }
 
-    /** Seller page: the public summary plus available (ACTIVE) and sold book counts. */
+    /** Seller page: the public summary plus available (ACTIVE) and sold book counts and the star breakdown. */
     public PublicUserDTO publicProfile(User user) {
         ObjectId id = new ObjectId(user.getId());
         long available = mongoTemplate.count(new Query(Criteria.where("user.$id").is(id)
                 .and("status").is(Constants.BookStatus.ACTIVE)), Book.class);
         long sold = mongoTemplate.count(new Query(Criteria.where("user.$id").is(id)
                 .and("status").is(Constants.BookStatus.SOLD)), Book.class);
-        return PublicUserDTO.from(user).withCounts(available, sold);
+        return PublicUserDTO.from(user).forSellerPage(user, available, sold);
+    }
+
+    /**
+     * Saves an existing profile field by field ($set / $unset) rather than replacing the document,
+     * so fields the mapping doesn't write (sellerRating, updated only by RatingService) survive.
+     */
+    private Profile saveProfile(Profile profile) {
+        if (profile.getId() == null) return profileRepository.save(profile);
+        profile.setUpdatedAt(new Date());
+        org.bson.Document doc = new org.bson.Document();
+        mongoTemplate.getConverter().write(profile, doc);
+        Update update = new Update();
+        doc.forEach((key, value) -> {
+            if (!"_id".equals(key) && !"_class".equals(key)) update.set(key, value);
+        });
+        mongoTemplate.getConverter().getMappingContext().getRequiredPersistentEntity(Profile.class)
+                .doWithProperties((org.springframework.data.mapping.PropertyHandler<
+                        org.springframework.data.mongodb.core.mapping.MongoPersistentProperty>) property -> {
+                    if (property.isIdProperty() || !property.isWritable()) return;
+                    if (!doc.containsKey(property.getFieldName())) update.unset(property.getFieldName());
+                });
+        mongoTemplate.updateFirst(new Query(Criteria.where("_id").is(new ObjectId(profile.getId()))), update, Profile.class);
+        return profile;
     }
 
     public User updateUserProfile(String userId, UpdateProfileDTO dto) {
@@ -291,7 +315,7 @@ public class UserService {
         profile.setOnboardingCompleted(true);
         boolean locationChanged = !Objects.equals(previousState, profile.getAddress() == null ? null : profile.getAddress().getState())
                 || !Objects.equals(previousCity, profile.getAddress() == null ? null : profile.getAddress().getCity());
-        user.setProfile(profileRepository.save(profile));
+        user.setProfile(saveProfile(profile));
         User saved = userRepository.save(user);
 
         // Books carry a copy of the seller's location for shop filtering

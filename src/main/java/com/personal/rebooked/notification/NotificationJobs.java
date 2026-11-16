@@ -33,6 +33,8 @@ public class NotificationJobs {
     static final Duration UNREPLIED_AFTER = Duration.ofMinutes(30);
     static final Duration UNREPLIED_WINDOW = Duration.ofHours(24);
     static final Duration STALE_AFTER = Duration.ofDays(30);
+    static final Duration RATE_REMIND_AFTER = Duration.ofDays(3);
+    static final Duration RATE_REMIND_WINDOW = Duration.ofDays(10);
     static final Duration DRAFT_AFTER = Duration.ofDays(3);
     static final Duration QUIET_CHAT_AFTER = Duration.ofDays(7);
     static final Duration QUIET_CHAT_WINDOW = Duration.ofDays(60);
@@ -73,6 +75,7 @@ public class NotificationJobs {
         run("draft reminders", this::draftReminders);
         run("mark-as-sold nudges", this::markAsSoldNudges);
         run("onboarding reminders", this::onboardingReminders);
+        run("rate-seller reminders", this::rateSellerReminders);
         run("retention", () -> {
             long removed = inApp.deleteReadBefore(Date.from(Instant.now().minus(KEEP_READ)));
             if (removed > 0) log.info("Deleted {} read notifications older than {} days", removed, KEEP_READ.toDays());
@@ -135,6 +138,23 @@ public class NotificationJobs {
             Profile profile = user.getProfile();
             if (profile != null && profile.isOnboardingCompleted()) continue;
             notificationService.send(notifications.onboardingReminder(user.getId()));
+        }
+    }
+
+    /** Sold to a buyer 3 to 10 days ago and not rated yet: one email reminder per sale. */
+    void rateSellerReminders() {
+        Instant now = Instant.now();
+        Criteria criteria = where("status").is(Constants.BookStatus.SOLD).and("buyerId").exists(true).ne(null)
+                .and("soldDate").lte(Date.from(now.minus(RATE_REMIND_AFTER))).gte(Date.from(now.minus(RATE_REMIND_WINDOW)));
+        for (Book book : mongoTemplate.find(query(criteria), Book.class)) {
+            if (book.getUser() == null) continue;
+            String buyerId = book.getBuyerId();
+            if (mongoTemplate.exists(query(where("bookId").is(book.getId()).and("buyerId").is(buyerId)),
+                    com.personal.rebooked.rating.SellerRating.class)) continue;
+            String sellerId = book.getUser().getId();
+            String conversationId = mongoTemplate.findOne(query(where("pairKey").is(Conversation.pairKey(sellerId, buyerId))),
+                    Conversation.class) instanceof Conversation c ? c.getId() : null;
+            notificationService.send(notifications.rateSellerReminder(buyerId, sellerId, BookSnapshot.of(book), conversationId));
         }
     }
 

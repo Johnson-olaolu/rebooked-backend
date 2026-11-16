@@ -144,6 +144,13 @@ public class BookController {
         return ResponseHandler.generateResponse(ids, "Saved book ids fetched successfully");
     }
 
+    /** Who the seller can mark this book as sold to. */
+    @GetMapping("/{id}/chat-buyers")
+    public ResponseEntity<Object> chatBuyers(@PathVariable String id) {
+        return ResponseHandler.generateResponse(bookService.chatBuyers(CurrentUser.require(), id),
+                "Buyers fetched successfully");
+    }
+
     @PostMapping("/{id}/status")
     public ResponseEntity<Object> updateBookStatus(@PathVariable String id,
             @RequestBody @Valid UpdateBookStatusDTO updateBookStatusDTO) {

@@ -75,6 +75,6 @@ public class ConversationViews {
     }
 
     private static PublicUserDTO deletedUser(String id) {
-        return new PublicUserDTO(id, null, null, null, null, null, null, false, null, null);
+        return PublicUserDTO.deleted(id);
     }
 }

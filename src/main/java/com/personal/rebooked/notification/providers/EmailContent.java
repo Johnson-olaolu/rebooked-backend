@@ -60,6 +60,15 @@ public class EmailContent {
             case BOOK_AVAILABLE -> email(r, recipient, title + " is available again", "Back on the shelf",
                     List.of(title + ", which you asked about, is available again. It may not stay long."),
                     null, "Message the seller", links.conversation(r.conversationId()));
+            case RATE_SELLER -> Boolean.TRUE.equals(r.data("reminder"))
+                    ? email(r, recipient, "You haven't rated " + who + " yet", "How did it go?",
+                            List.of("You bought " + title + " from " + who + " a few days ago.",
+                                    "A quick rating helps other buyers know who to trust. It only takes a moment."),
+                            null, "Rate " + who, links.bought(r.book()))
+                    : email(r, recipient, "How was buying " + title + " from " + who + "?", "Rate your seller",
+                            List.of(who + " marked " + title + " as sold to you.",
+                                    "Once you have the book, let other buyers know how it went: 1 to 5 stars, and a comment if you like."),
+                            null, "Rate " + who, links.bought(r.book()));
             case MARK_AS_SOLD_NUDGE -> email(r, recipient, "Did you sell " + title + "?", "Did you sell " + title + "?",
                     List.of("The chat about " + title + " has gone quiet. If you've sold it, mark it as sold so buyers don't keep asking about it."),
                     null, "Update my shelf", links.shelf());

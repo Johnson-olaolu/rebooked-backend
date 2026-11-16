@@ -66,10 +66,12 @@ Code: `src/main/java/com/personal/rebooked/notification/`.
 ### Sales
 | Notification | Description | Trigger | Recipient | In-app | Email | Push | WhatsApp | Opt-out |
 |---|---|---|---|---|---|---|---|---|
-| `SOLD_TO_YOU` | The seller marked the book as sold to you | `/app/book.sold` | The buyer in that chat | ✅ | ✅ | | | Yes |
-| `SOLD_ELSEWHERE` | A book you asked about was sold to someone else | `/app/book.sold` in another chat, or "Mark as sold" on My shelf | Every other buyer with that book in a chat | ✅ | | | | Yes |
+| `SOLD_TO_YOU` | The seller marked the book as sold to you | `/app/book.sold`, or "Mark as sold" on My shelf naming you as the buyer | The buyer in that chat | ✅ | ✅ | | | Yes |
+| `SOLD_ELSEWHERE` | A book you asked about was sold to someone else | The book is marked as sold to another buyer, from the chat or from My shelf | Every other buyer with that book in a chat | ✅ | | | | Yes |
 | `BOOK_UNAVAILABLE` | A book you asked about was archived or removed | Status set to `INACTIVE`, or the book is deleted | Buyers with that book open in a chat | ✅ | | | | Yes |
 | `BOOK_AVAILABLE` | A book you asked about is back on the shelf | Status set back to `ACTIVE` | Buyers whose book was `SOLD_ELSEWHERE` or `UNAVAILABLE` | ✅ | ✅ | | | Yes |
+| `RATE_SELLER` | "How was buying X from Tola?", linking to the rating form (`/dashboard/bought/<bookId>`) | The book is marked as sold to the buyer, from the chat or from My shelf | The buyer | ✅ | ✅ | | | Yes |
+| `RATE_SELLER` reminder 🧠 | "You haven't rated Tola yet" | Daily job: sold to them 3–10 days ago and still not rated. Once per sale | The buyer | | ✅ | | | Yes (same setting as `RATE_SELLER`) |
 | `MARK_AS_SOLD_NUDGE` 🧠 | "Did you sell X?" so stale listings get cleaned up | Daily job: an `ACTIVE` book whose chat went quiet 7–60 days ago. At most once a month per book | Seller | ✅ | ✅ | | | Yes |
 
 ### Listings
@@ -91,6 +93,7 @@ All of these are in `NotificationJobs`. Each carries a `dedupeKey`, so re-runnin
 | Draft reminders | Daily | `DRAFT:<bookId>` |
 | Mark-as-sold nudges | Daily | `NUDGE:<bookId>:<yyyy-MM>` |
 | Onboarding reminders | Daily | `ONBOARD:<userId>` |
+| Rate-seller reminders | Daily | `RATE_REMIND:<bookId>:<buyerId>` |
 | Retention: delete read in-app notifications older than 90 days | Daily | — |
 | Views milestones (`ViewFlushJob`) | Every 5 min, with the view flush | `VIEWS:<bookId>:<milestone>` |
 

@@ -81,6 +81,7 @@ public class SecurityConfig {
                             // Only public profiles are open; /user/me must win over the GET /user/* rule below
                             .requestMatchers("/user/me", "/user/me/**").authenticated()
                             .requestMatchers(HttpMethod.GET, "/user/*").permitAll()
+                            .requestMatchers(HttpMethod.GET, "/user/*/ratings").permitAll()
                             .requestMatchers("/marketing/**").permitAll()
                             .requestMatchers("/book/me").authenticated()
                             // Per-user lists; must win over the public GET /book/* rule below

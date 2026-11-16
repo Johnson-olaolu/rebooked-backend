@@ -48,6 +48,11 @@ public class NotificationLinks {
         return book == null ? shelf() : base + "/dashboard/shelf/" + book.id() + "/edit";
     }
 
+    /** The rating form for a book the user bought. */
+    public String bought(BookSnapshot book) {
+        return book == null ? notifications() : base + "/dashboard/bought/" + book.id();
+    }
+
     public String changePassword(String email, String token) {
         return base + "/auth/change-password?email=" + encode(email) + "&token=" + encode(token);
     }

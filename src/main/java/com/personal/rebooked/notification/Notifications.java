@@ -77,6 +77,19 @@ public class Notifications {
         return sale(NotificationType.BOOK_AVAILABLE, buyerId, sellerId, book, conversationId);
     }
 
+    /** "How was buying X from Tola?", sent whenever a book is marked as sold to the buyer. */
+    public NotificationRequest rateSeller(String buyerId, String sellerId, BookSnapshot book, String conversationId) {
+        return sale(NotificationType.RATE_SELLER, buyerId, sellerId, book, conversationId);
+    }
+
+    /** The daily job's one reminder, 3 days after the sale, by email only. */
+    public NotificationRequest rateSellerReminder(String buyerId, String sellerId, BookSnapshot book, String conversationId) {
+        return base(NotificationType.RATE_SELLER, buyerId).actor(actor(sellerId)).book(book)
+                .conversationId(conversationId).channels(java.util.EnumSet.of(NotificationChannel.EMAIL))
+                .data(Map.of("reminder", true))
+                .dedupeKey("RATE_REMIND:" + book.id() + ":" + buyerId).build();
+    }
+
     public NotificationRequest markAsSoldNudge(String sellerId, BookSnapshot book, String month) {
         return base(NotificationType.MARK_AS_SOLD_NUDGE, sellerId).book(book)
                 .dedupeKey("NUDGE:" + book.id() + ":" + month).build();
