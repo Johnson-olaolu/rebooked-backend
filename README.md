@@ -19,7 +19,7 @@ A Spring Boot application that serves as the backend for the Rebooked platform, 
 - MongoDB
 - Gradle
 - A Cloudinary account
-- Gmail account (for email services)
+- A Resend account with a verified sending domain (for email)
 
 ## Environment Variables
 
@@ -30,14 +30,13 @@ CLOUDINARY_API_KEY=your_cloudinary_key
 CLOUDINARY_API_SECRET=your_cloudinary_secret
 CLOUDINARY_FOLDER_NAME=your_folder_name
 CLOUDINARY_NAME=your_cloudinary_name
-EMAIL_HOST=gmail
-EMAIL_PASSWORD=your_app_specific_password
-EMAIL_USER=your_email@gmail.com
 GOOGLE_CLIENT_ID=your_google_client_id
 GOOGLE_CLIENT_SECRET=your_google_client_secret
 JWT_EXPIRATION_TIME=3600000
 MONGODB_URI=mongodb://localhost:27017/rebooked
 PORT=5001
+RESEND_API_KEY=re_your_resend_api_key
+RESEND_FROM=Rebooked <hello@yourdomain.com>
 SECRET_KEY=your_jwt_secret_key
 ```
 

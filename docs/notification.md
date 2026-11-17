@@ -22,7 +22,7 @@ Code: `src/main/java/com/personal/rebooked/notification/`.
 | Channel | Provider | What it does |
 |---|---|---|
 | `IN_APP` | `providers/InAppProvider` | Stores the notification in `notifications` and pushes `{type: "notification"}` on `/user/queue/events`. Shown on the notifications page and the bell. |
-| `EMAIL` | `providers/EmailProvider` | Renders `EmailContent` (subject and body per type) into `templates/mail/notification.html` and sends it through SMTP. The account emails keep their own templates. Only verified addresses get anything other than account emails. |
+| `EMAIL` | `providers/EmailProvider` | Renders `EmailContent` (subject and body per type) into `templates/mail/notification.html` and sends it through Resend (`service/MailService`). The account emails keep their own templates. Only verified addresses get anything other than account emails. |
 | `PUSH` | — | Planned |
 | `WHATSAPP` | — | Planned |
 

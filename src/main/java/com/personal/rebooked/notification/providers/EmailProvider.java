@@ -9,7 +9,7 @@ import com.personal.rebooked.user.models.User;
 import lombok.RequiredArgsConstructor;
 import org.springframework.stereotype.Component;
 
-/** Email through MailService (SMTP). Only verified addresses get anything but the account emails. */
+/** Email through MailService (Resend). Only verified addresses get anything but the account emails. */
 @Component
 @RequiredArgsConstructor
 public class EmailProvider implements NotificationProvider {
