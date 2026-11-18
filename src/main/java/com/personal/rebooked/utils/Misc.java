@@ -145,13 +145,52 @@ public class Misc {
 
     /** "Half of a Yellow Sun!" -> "half-of-a-yellow-sun" (ASCII only, at most 60 characters). */
     public static String slugify(String input) {
-        if (input == null) return "book";
+        return slugify(input, "book");
+    }
+
+    /** As {@link #slugify(String)}, with {@code fallback} when nothing ASCII is left (e.g. "author"). */
+    public static String slugify(String input, String fallback) {
+        if (input == null) return fallback;
         String s = java.text.Normalizer.normalize(input, java.text.Normalizer.Form.NFD)
                 .replaceAll("\\p{M}", "")
                 .toLowerCase(java.util.Locale.ROOT)
                 .replaceAll("[^a-z0-9]+", "-")
                 .replaceAll("^-+|-+$", "");
         if (s.length() > 60) s = s.substring(0, 60).replaceAll("-+$", "");
-        return s.isEmpty() ? "book" : s;
+        return s.isEmpty() ? fallback : s;
+    }
+
+    /** Plain text from user or imported input: tags removed, common entities decoded, line breaks kept, trimmed. */
+    public static String stripHtml(String input) {
+        if (input == null) return null;
+        String s = input.replaceAll("(?is)<(script|style)[^>]*>.*?</\\1>", "")
+                .replaceAll("(?i)<br\\s*/?>|</p\\s*>", "\n")
+                .replaceAll("<[^>]*>", "")
+                // &lt; and &gt; stay encoded, so stripping can't be undone by decoding
+                .replace("&nbsp;", " ").replace("&quot;", "\"").replace("&#39;", "'").replace("&amp;", "&")
+                .replaceAll("[ \\t]+\n", "\n")
+                .replaceAll("\n{3,}", "\n\n")
+                .trim();
+        return s.isEmpty() ? null : s;
+    }
+
+    /** Only https URLs are stored for external links and photos. */
+    public static boolean isHttpsUrl(String url) {
+        if (url == null || url.isBlank()) return false;
+        try {
+            java.net.URI uri = new java.net.URI(url.trim());
+            return "https".equalsIgnoreCase(uri.getScheme()) && uri.getHost() != null;
+        } catch (java.net.URISyntaxException e) {
+            return false;
+        }
+    }
+
+    /** The caller's IP, for per-IP limits when logged out. */
+    public static String clientIp(jakarta.servlet.http.HttpServletRequest request) {
+        String forwarded = request.getHeader("X-Forwarded-For");
+        if (forwarded != null && !forwarded.isBlank()) {
+            return forwarded.split(",")[0].trim();
+        }
+        return request.getRemoteAddr();
     }
 }

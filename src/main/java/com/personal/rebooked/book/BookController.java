@@ -8,6 +8,7 @@ import com.personal.rebooked.book.views.BookViews;
 import com.personal.rebooked.security.CurrentUser;
 import com.personal.rebooked.user.models.User;
 import com.personal.rebooked.utils.Constants;
+import com.personal.rebooked.utils.Misc;
 import com.personal.rebooked.utils.ResponseHandler;
 
 import io.swagger.v3.oas.annotations.security.SecurityRequirement;
@@ -102,7 +103,7 @@ public class BookController {
     @PatchMapping("/{bookId}/view")
     public ResponseEntity<Object> viewBook(@PathVariable String bookId, HttpServletRequest request) {
         String userId = CurrentUser.optional().map(User::getId).orElse(null);
-        bookViews.record(bookId, userId, clientIp(request));
+        bookViews.record(bookId, userId, Misc.clientIp(request));
         return ResponseHandler.generateResponse(null, "View recorded");
     }
 
@@ -162,13 +163,5 @@ public class BookController {
     public ResponseEntity<Object> deleteBook(@PathVariable String id) {
         bookService.delete(CurrentUser.require(), id);
         return ResponseHandler.generateResponse(null, "Book deleted successfully");
-    }
-
-    private static String clientIp(HttpServletRequest request) {
-        String forwarded = request.getHeader("X-Forwarded-For");
-        if (forwarded != null && !forwarded.isBlank()) {
-            return forwarded.split(",")[0].trim();
-        }
-        return request.getRemoteAddr();
     }
 }

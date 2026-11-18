@@ -40,6 +40,17 @@ RESEND_FROM=Rebooked <hello@yourdomain.com>
 SECRET_KEY=your_jwt_secret_key
 ```
 
+Optional, for the author catalogue import (defaults in `application.properties`):
+
+```env
+# Monthly Open Library import; true in production. POST /admin/author-import works either way.
+AUTHORS_IMPORT_ENABLED=false
+# Where the Open Library dumps are downloaded (about 5 GB while an import runs)
+AUTHORS_IMPORT_DIR=./data/imports
+# Sent to Open Library and Wikidata: a client name plus a contact address
+WIKIDATA_USER_AGENT=RebookedAuthorImporter/1.0 (https://your-site.example; ops@your-site.example)
+```
+
 ## Getting Started
 
 1. Clone the repository:

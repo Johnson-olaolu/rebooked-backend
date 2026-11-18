@@ -71,6 +71,8 @@ public class SecurityConfig {
                     authorizeRequests
                             .requestMatchers("/").permitAll()
                             .requestMatchers("/error").permitAll()
+                            // The admin area (authors, imports): superAdmin only; first so nothing below can open it
+                            .requestMatchers("/admin/**").hasAuthority(Constants.ROLE_SUPER_ADMIN)
                             // Settings → Password needs the session; must win over /auth/** below
                             .requestMatchers(HttpMethod.POST, "/auth/change-password").authenticated()
                             .requestMatchers("/auth/**").permitAll()
@@ -83,6 +85,9 @@ public class SecurityConfig {
                             .requestMatchers(HttpMethod.GET, "/user/*").permitAll()
                             .requestMatchers(HttpMethod.GET, "/user/*/ratings").permitAll()
                             .requestMatchers("/marketing/**").permitAll()
+                            // Authors: reading is public; adding a missing author needs a login
+                            .requestMatchers(HttpMethod.POST, "/author/proposals").authenticated()
+                            .requestMatchers(HttpMethod.GET, "/author/**").permitAll()
                             .requestMatchers("/book/me").authenticated()
                             // Per-user lists; must win over the public GET /book/* rule below
                             .requestMatchers("/book/saved", "/book/saved/**", "/book/recently-viewed").authenticated()

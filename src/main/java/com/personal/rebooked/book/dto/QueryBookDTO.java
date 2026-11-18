@@ -11,12 +11,14 @@ public record QueryBookDTO(
         String userId,
         List<String> categoryIds,
         String search,
+        /** Only books by this author (a merged id resolves to its canonical author) */
+        String authorId,
         List<String> states,
         List<String> conditions,
         Double minPrice,
         Double maxPrice,
         Boolean free,
-        /** NEWEST (default), PRICE_ASC or PRICE_DESC */
+        /** RELEVANCE (default when search is set), NEWEST (default otherwise), PRICE_ASC or PRICE_DESC */
         String sort,
         /** ACTIVE (default) or SOLD; SOLD requires userId */
         String status,

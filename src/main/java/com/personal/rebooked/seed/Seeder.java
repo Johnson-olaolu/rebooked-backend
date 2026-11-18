@@ -1,5 +1,10 @@
 package com.personal.rebooked.seed;
 
+import com.personal.rebooked.author.AuthorService;
+import com.personal.rebooked.author.admin.AuthorMergeService;
+import com.personal.rebooked.author.importer.AuthorImportService;
+import com.personal.rebooked.author.migration.AuthorMigration;
+import com.personal.rebooked.author.models.Author;
 import com.personal.rebooked.book.BookService;
 import com.personal.rebooked.book.dto.CreateBookDto;
 import com.personal.rebooked.book.models.Book;
@@ -59,6 +64,10 @@ public class Seeder implements ApplicationRunner {
     private final FileService fileService;
     private final BookService bookService;
     private final MongoTemplate mongoTemplate;
+    private final AuthorService authorService;
+    private final AuthorMigration authorMigration;
+    private final AuthorMergeService authorMergeService;
+    private final AuthorImportService authorImportService;
 
     @Override
     public void run(ApplicationArguments args) throws Exception {
@@ -69,6 +78,9 @@ public class Seeder implements ApplicationRunner {
         expireLegacyEmailCodes();
         migrateBookLocations();
         migrateBookSlugs();
+        authorMigration.migrateBookAuthors();
+        authorMergeService.resumeIncomplete();
+        authorImportService.markInterrupted();
         dropLegacyNotifications();
         defaultViewCounts();
 //        seedBooks();
@@ -238,9 +250,12 @@ public class Seeder implements ApplicationRunner {
                                         List<String> tagNames, List<String> imageIds) {
         List<String> images = Misc.getRandomIds(imageIds, 1, Constants.BOOK_MAX_IMAGES);
         Constants.BookCondition[] conditions = Constants.BookCondition.values();
+        List<String> authorIds = AuthorMigration.split(bookData.author()).names().stream()
+                .map(name -> authorService.findOrCreate(name, Author.Origin.ADMIN_CREATED, Author.Source.ADMIN).getId())
+                .toList();
         return new CreateBookDto(
                 bookData.title(),
-                bookData.author(),
+                authorIds,
                 Misc.generateRandomPrice(),
                 false,
                 conditions[new Random().nextInt(conditions.length)],

@@ -54,3 +54,6 @@ logs/
 ### OS specific ###
 .DS_Store
 Thumbs.db
+
+# Open Library dumps for the author import (§23g)
+/data/imports/

@@ -6,14 +6,13 @@ import jakarta.validation.constraints.Size;
 
 import java.util.List;
 
-/** PATCH /book/{id}. null = keep; "" clears author, isbn and description. */
+/** PATCH /book/{id}. null = keep; "" clears isbn and description; authorIds [] clears the authors (drafts only). */
 public record UpdateBookDTO(
         @Pattern(regexp = ".*\\S.*", message = "Title is required")
         @Size(max = 200, message = "Title must be at most 200 characters")
         String title,
 
-        @Size(max = 120, message = "Author must be at most 120 characters")
-        String author,
+        List<String> authorIds,
 
         Double price,
 

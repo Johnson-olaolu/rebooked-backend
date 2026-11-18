@@ -68,6 +68,7 @@ public class ConversationService {
     private final Notifications notifications;
     private final InAppNotifications inAppNotifications;
     private final com.personal.rebooked.user.repositories.UserRepository userRepository;
+    private final com.personal.rebooked.author.AuthorStats authorStats;
 
     /** Retries are matched on { senderId, clientId }; only TEXT messages carry a clientId. */
     @PostConstruct
@@ -207,6 +208,7 @@ public class ConversationService {
                         .set("buyerId", buyerId).set("updatedAt", new Date()),
                 Book.class);
         if (sold.getModifiedCount() == 0) return null;
+        authorStats.recountBook(book);
 
         conversation = changeState(conversation, bookId, ConversationBookState.SOLD_TO_BUYER, SystemEvent.SOLD_TO_BUYER, sellerId);
         var snapshot = Notifications.snapshot(conversation.book(bookId).orElse(null));

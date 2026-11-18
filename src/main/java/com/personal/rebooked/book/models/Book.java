@@ -18,6 +18,7 @@ import org.springframework.data.mongodb.core.index.Indexed;
 import org.springframework.data.mongodb.core.mapping.DBRef;
 import org.springframework.data.mongodb.core.mapping.Document;
 
+import java.util.ArrayList;
 import java.util.Date;
 import java.util.List;
 
@@ -25,7 +26,9 @@ import java.util.List;
 @Document
 @CompoundIndexes({
         @CompoundIndex(name = "status_state_created", def = "{'status': 1, 'location.state': 1, 'createdAt': -1}"),
-        @CompoundIndex(name = "status_price", def = "{'status': 1, 'price': 1}")
+        @CompoundIndex(name = "status_price", def = "{'status': 1, 'price': 1}"),
+        // Book search by author, the author page, and AuthorStats.recount
+        @CompoundIndex(name = "author_status", def = "{'authors.authorId': 1, 'status': 1}")
 })
 public class Book {
     @Id
@@ -46,7 +49,12 @@ public class Book {
     /** The seller's state and city, kept in sync with their profile address. */
     private BookLocation location;
 
-    private String author;
+    /** In display order (position 0…n). The JSON is [{ id, name, slug }]. */
+    private List<BookAuthor> authors = new ArrayList<>();
+
+    /** The free-text author from before the catalogue (§23e). Only the migration writes it; never returned. */
+    @JsonIgnore
+    private String legacyAuthor;
 
     /** In naira. 0 when the book is free. */
     private Double price;
@@ -92,5 +100,11 @@ public class Book {
     @JsonProperty("seller")
     public PublicUserDTO getSeller() {
         return PublicUserDTO.from(user);
+    }
+
+    /** "A, B": for the AI prompts. */
+    public String authorNames() {
+        if (authors == null) return "";
+        return String.join(", ", authors.stream().map(BookAuthor::getName).filter(java.util.Objects::nonNull).toList());
     }
 }

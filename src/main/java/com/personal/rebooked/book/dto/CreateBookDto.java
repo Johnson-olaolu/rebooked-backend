@@ -14,8 +14,8 @@ public record CreateBookDto(
         @Size(max = 200, message = "Title must be at most 200 characters")
         String title,
 
-        @Size(max = 120, message = "Author must be at most 120 characters")
-        String author,
+        /** Author ids from GET /author/search or POST /author/proposals, in display order. Optional for a draft. */
+        List<String> authorIds,
 
         Double price,
 

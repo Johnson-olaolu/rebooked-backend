@@ -56,7 +56,7 @@ public class MarketingService {
             Map<String, String> bookMap = new HashMap<>();
             bookMap.put("id", book.getId());
             bookMap.put("title", book.getTitle());
-            bookMap.put("author", book.getAuthor());
+            bookMap.put("author", book.authorNames());
             bookMap.put("description", book.getDescription());
             bookMap.put("viewCount", String.valueOf(book.getViewCount()));
 //            bookMap.put("tags", book.getTags().stream().map(t -> t.getName()).reduce((a, b) -> a + ", " + b).orElse(""));

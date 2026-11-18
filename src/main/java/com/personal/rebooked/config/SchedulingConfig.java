@@ -6,7 +6,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
-/** Scheduled jobs (notification reminders), STOMP heartbeats, and background notification delivery. */
+/** Scheduled jobs (notification reminders, author imports), STOMP heartbeats, and background work. */
 @Configuration
 @EnableScheduling
 public class SchedulingConfig {
@@ -28,6 +28,18 @@ public class SchedulingConfig {
         executor.setMaxPoolSize(4);
         executor.setQueueCapacity(500);
         executor.setThreadNamePrefix("notify-");
+        executor.initialize();
+        return executor;
+    }
+
+    /** Author imports (§23g): one at a time, hours long, so on their own thread. */
+    @Bean
+    public ThreadPoolTaskExecutor authorImportExecutor() {
+        ThreadPoolTaskExecutor executor = new ThreadPoolTaskExecutor();
+        executor.setCorePoolSize(1);
+        executor.setMaxPoolSize(1);
+        executor.setQueueCapacity(5);
+        executor.setThreadNamePrefix("author-import-");
         executor.initialize();
         return executor;
     }

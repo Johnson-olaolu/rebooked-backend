@@ -10,7 +10,7 @@ package com.personal.rebooked.homepage;
  * TODO: Best Sellers - {most viewed books not sold yet}
  * TODO: Featured Category - {random category with top 6 books}
  * TODO: AI picks - {AI recommended books based on user preferences, if user is logged in else ai recommended books based on overall trends}
- * TODO: Top Authors - {most viewed authors - (Generate author image based on their name using an avatar generator)}
+ * DONE: Top Authors - GET /author/top (most-shelved authors, §23c)
  * TODO: User Reviews - {random 5 reviews from the past week with book and user details}
  * TODO: News and Events - {upcoming book releases, author events, and literary news}
  * TODO: Join newsletter - {email subscription form for updates and promotions}
