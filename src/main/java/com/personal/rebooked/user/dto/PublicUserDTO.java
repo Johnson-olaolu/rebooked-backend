@@ -12,7 +12,8 @@ import java.util.Map;
 
 /**
  * What anyone may see about a user: no email, phone number, role or precise address.
- * availableCount, soldCount and rating.stars are only filled in on GET /user/{id} (the seller page).
+ * availableCount and soldCount are only filled in on GET /user/{id} (the seller page) and the homepage's trusted
+ * sellers; rating.stars only on GET /user/{id}.
  */
 public record PublicUserDTO(String id, String userName, String profilePictureUrl, String city, String state,
                             String bio, Date joinedAt, boolean hasPhone,
@@ -66,6 +67,13 @@ public record PublicUserDTO(String id, String userName, String profilePictureUrl
         Profile profile = user.getProfile();
         return new PublicUserDTO(id, userName, profilePictureUrl, city, state, bio, joinedAt, hasPhone, available, sold,
                 Rating.of(profile != null ? profile.getSellerRating() : null, true));
+    }
+
+    /** The homepage's trusted sellers (§24g): book counts and the rating summary, without the star breakdown. */
+    public static PublicUserDTO withSales(User user, long available, long sold) {
+        PublicUserDTO base = from(user);
+        return new PublicUserDTO(base.id, base.userName, base.profilePictureUrl, base.city, base.state, base.bio,
+                base.joinedAt, base.hasPhone, available, sold, base.rating);
     }
 
     /** A user who no longer exists. */

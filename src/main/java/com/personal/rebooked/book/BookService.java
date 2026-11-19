@@ -1,7 +1,5 @@
 package com.personal.rebooked.book;
 
-import com.fasterxml.jackson.databind.ObjectMapper;
-import com.google.gson.Gson;
 import com.personal.rebooked.author.AuthorService;
 import com.personal.rebooked.author.AuthorStats;
 import com.personal.rebooked.book.dto.*;
@@ -20,8 +18,6 @@ import com.personal.rebooked.file.respositories.FileRepository;
 import com.personal.rebooked.notification.BookSnapshot;
 import com.personal.rebooked.notification.NotificationService;
 import com.personal.rebooked.notification.Notifications;
-import com.personal.rebooked.service.AiService;
-import com.personal.rebooked.service.RedisService;
 import com.personal.rebooked.user.models.User;
 import com.personal.rebooked.utils.Constants;
 import com.personal.rebooked.utils.Misc;
@@ -42,7 +38,6 @@ import org.springframework.web.server.ResponseStatusException;
 import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.*;
-import java.util.concurrent.TimeUnit;
 import java.util.regex.Pattern;
 
 import static org.springframework.data.mongodb.core.aggregation.Aggregation.lookup;
@@ -52,17 +47,12 @@ import static org.springframework.data.mongodb.core.aggregation.Aggregation.look
 @Service
 public class BookService {
 
-    private static final String AI_PICKS_KEY = "ai_recommended_book_ids";
-    private static final int AI_PICKS_SAMPLE = 50;
-
     private final BookRepository bookRepository;
     private final FileRepository fileRepository;
     private final FileService fileService;
     private final CategoryRepository categoryRepository;
     private final TagRepository tagRepository;
     private final MongoTemplate mongoTemplate;
-    private final AiService aiService;
-    private final RedisService redisService;
     private final ApplicationEventPublisher events;
     private final NotificationService notificationService;
     private final Notifications notifications;
@@ -115,6 +105,7 @@ public class BookService {
         book.setSlug(uniqueSlug(book.getTitle()));
         Book saved = bookRepository.save(book);
         authorStats.recountBook(saved);
+        events.publishEvent(new BookChangedEvent(saved, BookChangedEvent.Kind.CREATED, null));
         return saved;
     }
 
@@ -739,55 +730,6 @@ public class BookService {
                 .filter(b -> b.getStatus() == Constants.BookStatus.ACTIVE || b.getStatus() == Constants.BookStatus.SOLD)
                 .filter(b -> b.getUser() == null || !viewer.getId().equals(b.getUser().getId()))
                 .toList();
-    }
-
-    @SuppressWarnings("unchecked")
-    public List<Book> getAIRecommendedBooks() {
-        Object cached = redisService.get(AI_PICKS_KEY);
-        if (cached instanceof List<?> ids && !ids.isEmpty()) {
-            // Re-read so sold, deleted or unpublished books drop out
-            List<Book> books = activeBooksInOrder((List<String>) ids);
-            if (!books.isEmpty()) return books;
-        }
-        try {
-            List<Book> books = new ArrayList<>(findAll(Constants.BookStatus.ACTIVE));
-            if (books.isEmpty()) return List.of();
-            Collections.shuffle(books, new Random());
-            books = books.subList(0, Math.min(AI_PICKS_SAMPLE, books.size()));
-
-            List<Map<String, String>> bookList = new ArrayList<>();
-            for (Book book : books) {
-                Map<String, String> bookMap = new HashMap<>();
-                bookMap.put("id", book.getId());
-                bookMap.put("title", book.getTitle());
-                bookMap.put("author", book.authorNames());
-                bookMap.put("description", book.getDescription());
-                bookMap.put("viewCount", String.valueOf(book.getViewCount()));
-                bookMap.put("categories", book.getCategories() == null ? "" : book.getCategories().stream()
-                        .map(Category::getName).reduce((a, b) -> a + ", " + b).orElse(""));
-                bookList.add(bookMap);
-            }
-            String booksJson = new ObjectMapper().writeValueAsString(bookList);
-            String response = aiService.suggestBooks(booksJson);
-            List<String> ids = new Gson().fromJson(response, List.class);
-            List<Book> picks = activeBooksInOrder(ids);
-            redisService.save(AI_PICKS_KEY, picks.stream().map(Book::getId).toList(), 7, TimeUnit.DAYS);
-            return picks;
-        } catch (Exception e) {
-            log.error("Failed to fetch AI recommended books", e);
-            throw new ResponseStatusException(HttpStatus.INTERNAL_SERVER_ERROR, "Failed to fetch AI recommended books");
-        }
-    }
-
-    private List<Book> activeBooksInOrder(List<String> ids) {
-        List<Book> books = new ArrayList<>();
-        for (String id : ids) {
-            if (!isObjectId(id)) continue;
-            bookRepository.findById(id)
-                    .filter(b -> b.getStatus() == Constants.BookStatus.ACTIVE)
-                    .ifPresent(books::add);
-        }
-        return books;
     }
 
     public List<Book> getTopBooks() {

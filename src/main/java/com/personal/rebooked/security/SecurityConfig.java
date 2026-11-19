@@ -100,6 +100,8 @@ public class SecurityConfig {
                             .requestMatchers(HttpMethod.DELETE, "/category/**").hasAuthority(Constants.ROLE_SUPER_ADMIN)
                             // Shop browsing is public; the literal routes above/below stay as configured
                             .requestMatchers(HttpMethod.GET, "/book/query").permitAll()
+                            // The home page bundle (§24b); /homepage/for-you falls through to authenticated
+                            .requestMatchers(HttpMethod.GET, "/homepage", "/homepage/stats").permitAll()
                             .requestMatchers(HttpMethod.GET, "/book/sold").authenticated()
                             .requestMatchers(HttpMethod.GET, "/book/*", "/book/slug/*").permitAll()
                             .requestMatchers("/documentation").permitAll()

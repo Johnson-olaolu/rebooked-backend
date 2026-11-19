@@ -1,31 +1,43 @@
 package com.personal.rebooked.homepage;
 
+import com.personal.rebooked.homepage.sections.ForYouSection;
+import com.personal.rebooked.security.CurrentUser;
+import com.personal.rebooked.utils.ResponseHandler;
+import lombok.RequiredArgsConstructor;
+import org.springframework.http.CacheControl;
+import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RestController;
 
-/**
- * TODO: Homepage Title
- * TODO: Initial Books - {top 3 featured books}
- * TODO: Site stats - {total books, total users, total transactions, average rating, num of authors}
- * TODO: Week Highlights - {top 6 books viewed in the past week}
- * TODO: Top Categories - {most viewed categories}
- * TODO: Best Sellers - {most viewed books not sold yet}
- * TODO: Featured Category - {random category with top 6 books}
- * TODO: AI picks - {AI recommended books based on user preferences, if user is logged in else ai recommended books based on overall trends}
- * DONE: Top Authors - GET /author/top (most-shelved authors, §23c)
- * TODO: User Reviews - {random 5 reviews from the past week with book and user details}
- * TODO: News and Events - {upcoming book releases, author events, and literary news}
- * TODO: Join newsletter - {email subscription form for updates and promotions}
- *
- *
- *
- * OTHER PAGES
- * FAQS
- * Contact Us
- * About Us
- * Terms of Service
- * Privacy Policy
- * Return Policy
- * Payment Options
- * */
+import java.util.concurrent.TimeUnit;
 
+/** The public home page (§24): one cached bundle, stats for other pages, and personalised picks. */
+@RestController
+@RequestMapping("/homepage")
+@RequiredArgsConstructor
 public class HomepageController {
+    private static final CacheControl PUBLIC_MINUTE = CacheControl.maxAge(60, TimeUnit.SECONDS).cachePublic();
+
+    private final HomepageService homepageService;
+    private final ForYouSection forYou;
+
+    @GetMapping
+    public ResponseEntity<Object> homepage() {
+        return withCache(ResponseHandler.generateResponse(homepageService.bundle(), "Homepage fetched successfully"));
+    }
+
+    @GetMapping("/stats")
+    public ResponseEntity<Object> stats() {
+        return withCache(ResponseHandler.generateResponse(homepageService.stats(), "Stats fetched successfully"));
+    }
+
+    @GetMapping("/for-you")
+    public ResponseEntity<Object> forYou() {
+        return ResponseHandler.generateResponse(forYou.forYou(CurrentUser.require()), "Picks fetched successfully");
+    }
+
+    private static ResponseEntity<Object> withCache(ResponseEntity<Object> response) {
+        return ResponseEntity.status(response.getStatusCode()).cacheControl(PUBLIC_MINUTE).body(response.getBody());
+    }
 }

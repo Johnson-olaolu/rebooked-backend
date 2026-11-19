@@ -5,6 +5,7 @@ import com.personal.rebooked.book.models.Book;
 import com.personal.rebooked.book.saved.SavedBookService;
 import com.personal.rebooked.book.saved.SavedBooksPage;
 import com.personal.rebooked.book.views.BookViews;
+import com.personal.rebooked.homepage.sections.AiPicksSection;
 import com.personal.rebooked.security.CurrentUser;
 import com.personal.rebooked.user.models.User;
 import com.personal.rebooked.utils.Constants;
@@ -31,6 +32,7 @@ public class BookController {
     private final BookService bookService;
     private final BookViews bookViews;
     private final SavedBookService savedBookService;
+    private final AiPicksSection aiPicksSection;
 
     @PostMapping
     public ResponseEntity<Object> createBook(@RequestBody @Valid CreateBookDto createBookDto) {
@@ -68,9 +70,10 @@ public class BookController {
         return ResponseHandler.generateResponse(books, "Books fetched successfully");
     }
 
+    /** The homepage's daily AI picks (§24e), books only. Reads the snapshot; never calls the model. */
     @GetMapping("/ai-picks")
     public ResponseEntity<Object> getAIPicks() {
-        List<Book> aiPicks = bookService.getAIRecommendedBooks();
+        List<Book> aiPicks = aiPicksSection.books();
         return ResponseHandler.generateResponse(aiPicks, "AI Picks fetched successfully");
     }
 

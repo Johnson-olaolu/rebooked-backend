@@ -33,6 +33,7 @@ import static com.mongodb.client.model.Projections.include;
  *   <li>{@code views:pending} HASH bookId → n: counts not yet in Mongo, no expiry</li>
  *   <li>{@code recent:{userId}} ZSET bookId → viewedAt ms: newest 20, 30 days</li>
  *   <li>{@code recent:dirty} SET of userIds whose recents changed since the last flush, no expiry</li>
+ *   <li>{@code views:day:{yyyyMMdd}} ZSET bookId → counted views that day, 8 days: the "this week" sections (§24a)</li>
  * </ul>
  */
 @Slf4j
@@ -46,12 +47,13 @@ public class BookViews {
     public static final int RECENT_MAX = 20;
     static final Duration DEDUPE_TTL = Duration.ofHours(26);
     static final Duration RECENT_TTL = Duration.ofDays(30);
-    private static final ZoneId ZONE = ZoneId.of("Africa/Lagos");
-    private static final DateTimeFormatter DAY = DateTimeFormatter.BASIC_ISO_DATE;
+    static final Duration DAY_BUCKET_TTL = Duration.ofDays(8);
+    public static final ZoneId ZONE = ZoneId.of("Africa/Lagos");
+    public static final DateTimeFormatter DAY = DateTimeFormatter.BASIC_ISO_DATE;
 
     /**
-     * KEYS: dedupe set, pending hash, recents zset, dirty set.
-     * ARGV: bookId, now ms, dedupe ttl s, recents ttl s, userId ("" when logged out).
+     * KEYS: dedupe set, pending hash, recents zset, dirty set, day bucket zset.
+     * ARGV: bookId, now ms, dedupe ttl s, recents ttl s, userId ("" when logged out), recents max, day bucket ttl s.
      * Returns {counted (0/1), recents existed before this view (0/1)}.
      */
     private static final DefaultRedisScript<List> RECORD = new DefaultRedisScript<>("""
@@ -59,6 +61,8 @@ public class BookViews {
             if counted == 1 then
               if redis.call('TTL', KEYS[1]) < 0 then redis.call('EXPIRE', KEYS[1], ARGV[3]) end
               redis.call('HINCRBY', KEYS[2], ARGV[1], 1)
+              redis.call('ZINCRBY', KEYS[5], 1, ARGV[1])
+              if redis.call('TTL', KEYS[5]) < 0 then redis.call('EXPIRE', KEYS[5], ARGV[7]) end
             end
             local existed = 1
             if ARGV[5] ~= '' then
@@ -78,6 +82,11 @@ public class BookViews {
         return "recent:" + userId;
     }
 
+    /** Counted views of each book on one day (Africa/Lagos). */
+    public static String dayKey(LocalDate day) {
+        return "views:day:" + day.format(DAY);
+    }
+
     /**
      * PATCH /book/{id}/view. 404 unless the book is ACTIVE. The owner's own views are ignored.
      * Redis trouble is logged and swallowed: viewing must never break the book page.
@@ -87,14 +96,16 @@ public class BookViews {
         if (userId != null && userId.equals(ownerId)) return;
 
         String viewer = userId != null ? "user:" + userId : "ip:" + ip;
-        String day = LocalDate.now(ZONE).format(DAY);
+        LocalDate today = LocalDate.now(ZONE);
+        String day = today.format(DAY);
         try {
             List<?> result = redis.execute(RECORD,
                     List.of("viewed:" + viewer + ":" + day, PENDING,
-                            recentKey(userId == null ? "-" : userId), DIRTY),
+                            recentKey(userId == null ? "-" : userId), DIRTY, dayKey(today)),
                     bookId, String.valueOf(System.currentTimeMillis()),
                     String.valueOf(DEDUPE_TTL.toSeconds()), String.valueOf(RECENT_TTL.toSeconds()),
-                    userId == null ? "" : userId, String.valueOf(RECENT_MAX));
+                    userId == null ? "" : userId, String.valueOf(RECENT_MAX),
+                    String.valueOf(DAY_BUCKET_TTL.toSeconds()));
             boolean recentsExisted = result == null || result.size() < 2 || toLong(result.get(1)) == 1;
             if (userId != null && !recentsExisted) {
                 // The list had expired or been evicted: merge the Mongo copy back under this view

@@ -23,4 +23,22 @@ public interface AiService {
         Do not include anything else in the response.
         """)
     String suggestBooks(@UserMessage String booksJson);
+
+    /** Homepage AI picks (§24e). The user message is the candidate list as JSON. */
+    @SystemMessage(HOMEPAGE_PICKS)
+    String pickHomepageBooks(@UserMessage String booksJson);
+
+    /** Personalised picks (§24f). The user message starts with "The reader likes: …", then the list. */
+    @SystemMessage(HOMEPAGE_PICKS + """
+        The message starts with what the reader likes. Favour books that match it, but keep some variety.
+        """)
+    String pickBooksForReader(@UserMessage String likesAndBooksJson);
+
+    String HOMEPAGE_PICKS = """
+        You recommend second-hand books to readers in Nigeria.
+        From the list provided, choose the 8 most appealing books for a general audience.
+        Favour variety across categories and authors.
+        Respond ONLY with a JSON array of objects:
+        [{"id": "<book id from the list>", "reason": "<one sentence, at most 90 characters>"}]
+        """;
 }

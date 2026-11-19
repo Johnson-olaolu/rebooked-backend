@@ -6,7 +6,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskExecutor;
 import org.springframework.scheduling.concurrent.ThreadPoolTaskScheduler;
 
-/** Scheduled jobs (notification reminders, author imports), STOMP heartbeats, and background work. */
+/** Scheduled jobs (notification reminders, view flushes, homepage snapshots, author imports), STOMP heartbeats, and background work. */
 @Configuration
 @EnableScheduling
 public class SchedulingConfig {
@@ -14,7 +14,8 @@ public class SchedulingConfig {
     @Bean
     public ThreadPoolTaskScheduler taskScheduler() {
         ThreadPoolTaskScheduler scheduler = new ThreadPoolTaskScheduler();
-        scheduler.setPoolSize(2);
+        // 4, so the slow homepage AI job can't hold up ViewFlushJob (§24h)
+        scheduler.setPoolSize(4);
         scheduler.setThreadNamePrefix("scheduler-");
         scheduler.initialize();
         return scheduler;
