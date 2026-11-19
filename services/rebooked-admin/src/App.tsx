@@ -7,12 +7,13 @@ import {
 import {
   Add20Regular, ArrowLeft20Regular, ArrowSync20Regular, BookOpen24Regular, Checkmark20Regular,
   ChevronRight20Regular, Clock20Regular, Delete20Regular, Dismiss20Regular, DocumentBulletList24Regular,
-  Edit20Regular, Home24Regular, People24Regular, Person24Regular, Search20Regular, ShieldCheckmark24Regular,
+  Edit20Regular, Home24Regular, Navigation20Regular, People24Regular, Person24Regular, Search20Regular, ShieldCheckmark24Regular,
   SignOut20Regular, Sparkle24Regular, Tag24Regular, WeatherMoon20Regular, WeatherSunny20Regular,
 } from "@fluentui/react-icons";
 import { Link, Navigate, Outlet, Route, Routes, useLocation, useNavigate, useParams } from "react-router-dom";
-import { adminApi, isMockMode, mockAccount } from "./api";
-import type { Category, FeaturedSet, ReviewItem } from "./api";
+import { api as adminApi } from "./api";
+import type { Category, FeaturedSet, PreviewCredentials, ReviewItem } from "./api";
+import PreviewStateSwitcher from "./components/PreviewStateSwitcher";
 
 type LoaderState<T> = { data: T | null; loading: boolean; error: string | null };
 function useResource<T>(load: () => Promise<T>, dependencies: unknown[] = []) {
@@ -41,7 +42,43 @@ function useNotice() {
 }
 
 function RequireAuth() {
-  return localStorage.getItem("rebooked-admin-session") ? <Outlet /> : <Navigate to="/login" replace />;
+  const [status, setStatus] = useState<"checking" | "authenticated" | "unauthenticated">("checking");
+  useEffect(() => {
+    let cancelled = false;
+    const finish = (next: "authenticated" | "unauthenticated") => {
+      if (!cancelled) setStatus(next);
+    };
+    const authenticate = async () => {
+      if (localStorage.getItem("rebooked-admin-session")) {
+        try {
+          finish(await adminApi.getCurrentUser() ? "authenticated" : "unauthenticated");
+        } catch {
+          finish("unauthenticated");
+        }
+        return;
+      }
+      const credentials = import.meta.env.DEV && localStorage.getItem("rebooked-admin-logged-out") !== "true"
+        ? adminApi.getPreviewCredentials()
+        : null;
+      if (!credentials) {
+        finish("unauthenticated");
+        return;
+      }
+      try {
+        const result = await adminApi.login(credentials.email, credentials.password);
+        localStorage.setItem("rebooked-admin-session", "true");
+        localStorage.setItem("rebooked-admin-token", result.token);
+        localStorage.setItem("rebooked-admin-email", result.user.email);
+        finish("authenticated");
+      } catch {
+        finish("unauthenticated");
+      }
+    };
+    void authenticate();
+    return () => { cancelled = true; };
+  }, []);
+  if (status === "checking") return <LoadingPanel rows={2} />;
+  return status === "authenticated" ? <Outlet /> : <Navigate to="/login" replace />;
 }
 
 const navigation = [
@@ -57,15 +94,17 @@ function AppShell() {
   const navigate = useNavigate();
   const [dark, setDark] = useState(localStorage.getItem("rebooked-admin-theme") === "dark");
   const [menuOpen, setMenuOpen] = useState(false);
-  const userEmail = localStorage.getItem("rebooked-admin-email") ?? mockAccount.email;
+  const userEmail = localStorage.getItem("rebooked-admin-email") ?? "Administrator";
   const active = location.pathname.startsWith("/authors/") ? "/authors" : location.pathname;
   const toggleTheme = () => {
     const next = !dark;
     setDark(next);
     localStorage.setItem("rebooked-admin-theme", next ? "dark" : "light");
     document.documentElement.dataset.theme = next ? "dark" : "light";
+    window.dispatchEvent(new Event("rebooked-admin-theme-change"));
   };
   const signOut = () => {
+    localStorage.setItem("rebooked-admin-logged-out", "true");
     localStorage.removeItem("rebooked-admin-session");
     localStorage.removeItem("rebooked-admin-token");
     navigate("/login");
@@ -73,7 +112,7 @@ function AppShell() {
   return (
     <div className={`app-shell${dark ? " dark" : ""}`}>
       <header className="topbar">
-        <Button className="mobile-menu" appearance="subtle" aria-label="Toggle navigation" onClick={() => setMenuOpen(!menuOpen)}>☰</Button>
+        <Button className="mobile-menu" appearance="subtle" icon={<Navigation20Regular />} aria-label="Toggle navigation" onClick={() => setMenuOpen(!menuOpen)} />
         <Link to="/authors" className="brand"><span className="brand-mark">R</span><span>rebooked<span className="brand-admin"> / admin</span></span></Link>
         <div className="topbar-right">
           <span className="signed-in"><span className="online-dot" /> Super Admin <span className="topbar-divider">·</span> Signed in</span>
@@ -138,7 +177,8 @@ function initials(name: string) {
 
 function LoginPage() {
   const navigate = useNavigate();
-  const [email, setEmail] = useState(mockAccount.email);
+  const [credentials] = useState<PreviewCredentials | null>(() => adminApi.getPreviewCredentials());
+  const [email, setEmail] = useState(credentials?.email ?? "");
   const [password, setPassword] = useState("");
   const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
@@ -151,6 +191,7 @@ function LoginPage() {
       localStorage.setItem("rebooked-admin-session", "true");
       localStorage.setItem("rebooked-admin-token", result.token);
       localStorage.setItem("rebooked-admin-email", result.user.email);
+      localStorage.removeItem("rebooked-admin-logged-out");
       navigate("/authors");
     } catch (cause) {
       setError(cause instanceof Error ? cause.message : "Unable to sign in.");
@@ -173,7 +214,7 @@ function LoginPage() {
             {error && <div className="inline-error" role="alert">{error}</div>}
             <Button appearance="primary" type="submit" className="login-submit" disabled={busy}>{busy ? <Spinner size="tiny" /> : <>Sign in <ChevronRight20Regular /></>}</Button>
           </form>
-          {isMockMode && <div className="preview-credentials"><div><span className="credentials-dot" /> PREVIEW ACCOUNT</div><p><strong>{mockAccount.email}</strong><br />Password: <strong>{mockAccount.password}</strong></p><span>Local mock mode · data resets when the app reloads</span></div>}
+          {credentials && <div className="preview-credentials"><div><span className="credentials-dot" /> PREVIEW ACCOUNT</div><p><strong>{credentials.email}</strong><br />Password: <strong>{credentials.password}</strong></p><span>Local mock mode · data resets when the app reloads</span></div>}
           <div className="login-card-foot"><span>Need access?</span><span>Contact your workspace owner</span></div>
         </Card>
       </main>
@@ -224,7 +265,7 @@ function AuthorDetailPage() {
   };
   return <div className="page-stack">
     <div className="back-link"><Link to="/authors"><ArrowLeft20Regular /> Back to authors</Link><span> / Author profile</span></div>
-    {resource.loading ? <LoadingPanel /> : resource.error || !author ? <ErrorPanel message={resource.error ?? "Author not found."} retry={() => void resource.reload()} /> : <>
+    {resource.loading ? <LoadingPanel /> : resource.error ? <ErrorPanel message={resource.error} retry={() => void resource.reload()} /> : !author ? <EmptyState title="Author not found" detail="This author is not available in the current catalogue view." /> : <>
       <PageHeader eyebrow="AUTHOR PROFILE" title={author.name} description={`${author.status.replaceAll("_", " ")} · ${author.origin.replaceAll("_", " ")}`} action={<div className="inline-actions"><Button appearance="secondary" icon={<Edit20Regular />} onClick={() => notice("Profile editing will be available when live API mode is connected.")}>Edit profile</Button>{!author.verified && <Button appearance="primary" icon={<Checkmark20Regular />} onClick={() => void verify()}>Verify author</Button>}</div>} />
       <TabList selectedValue={tab} onTabSelect={(_, data) => setTab(String(data.value))} className="detail-tabs">
         {["Overview", "Books", "Identifiers", "Audit"].map((item) => <Tab key={item} value={item}>{item}</Tab>)}
@@ -333,7 +374,7 @@ function HomepagePage() {
   return <div className="page-stack">
     <PageHeader eyebrow="DISCOVERY & CURATION" title="Featured homepage" description="Curate the weekly spotlight and keep the reader experience fresh." action={<div className="week-pill"><Clock20Regular /><span>WEEK OF</span><strong>16 NOV 2026</strong></div>} />
     {notice && <div className="inline-success" role="status"><Checkmark20Regular />{notice}<button onClick={() => setNotice("")} aria-label="Dismiss"><Dismiss20Regular /></button></div>}
-    {resource.loading ? <LoadingPanel rows={3} /> : resource.error || !draft ? <ErrorPanel message={resource.error ?? "Featured set unavailable."} retry={() => void resource.reload()} /> : <div className="homepage-grid">
+    {resource.loading ? <LoadingPanel rows={3} /> : resource.error ? <ErrorPanel message={resource.error} retry={() => void resource.reload()} /> : !draft ? <EmptyState title="No featured set for this week" detail="Choose another week or create a featured homepage set." /> : <div className="homepage-grid">
       <Card className="panel featured-panel"><CardHeader header={<div><h2 className="panel-title">This week’s featured set</h2><div className="panel-subtitle">A spotlight selected for the Rebooked community.</div></div>} action={<StatusBadge value={draft.overrideActive ? "Override active" : "Automatic"} />} />
         <form className="featured-form" onSubmit={(event) => void save(event)}>
           <div className="form-row"><div><label className="field-label" htmlFor="week-date">Featured week</label><span className="field-hint">The Monday this weekly collection begins.</span></div><Input id="week-date" type="date" value={week} onChange={(_, data) => setWeek(data.value)} /></div>
@@ -404,19 +445,22 @@ export default function App() {
   const location = useLocation();
   const isLoggedIn = useMemo(() => Boolean(localStorage.getItem("rebooked-admin-session")), [location.pathname]);
   useEffect(() => { document.documentElement.dataset.theme = localStorage.getItem("rebooked-admin-theme") ?? "light"; }, []);
-  return <Routes>
-    <Route path="/login" element={isLoggedIn ? <Navigate to="/authors" replace /> : <LoginPage />} />
-    <Route element={<RequireAuth />}>
-      <Route element={<AppShell />}>
-        <Route path="/" element={<Navigate to="/authors" replace />} />
-        <Route path="/authors" element={<AuthorsPage />} />
-        <Route path="/authors/:id" element={<AuthorDetailPage />} />
-        <Route path="/reviews" element={<ReviewsPage />} />
-        <Route path="/imports" element={<ImportsPage />} />
-        <Route path="/homepage" element={<HomepagePage />} />
-        <Route path="/categories" element={<CategoriesPage />} />
-        <Route path="*" element={<NotFound />} />
+  return <>
+    <Routes>
+      <Route path="/login" element={isLoggedIn ? <Navigate to="/authors" replace /> : <LoginPage />} />
+      <Route element={<RequireAuth />}>
+        <Route element={<AppShell />}>
+          <Route path="/" element={<Navigate to="/authors" replace />} />
+          <Route path="/authors" element={<AuthorsPage />} />
+          <Route path="/authors/:id" element={<AuthorDetailPage />} />
+          <Route path="/reviews" element={<ReviewsPage />} />
+          <Route path="/imports" element={<ImportsPage />} />
+          <Route path="/homepage" element={<HomepagePage />} />
+          <Route path="/categories" element={<CategoriesPage />} />
+          <Route path="*" element={<NotFound />} />
+        </Route>
       </Route>
-    </Route>
-  </Routes>;
+    </Routes>
+    <PreviewStateSwitcher />
+  </>;
 }

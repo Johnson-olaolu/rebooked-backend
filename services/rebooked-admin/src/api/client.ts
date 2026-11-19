@@ -1,7 +1,5 @@
 const API_BASE_URL = import.meta.env.VITE_API_BASE_URL ?? "http://localhost:5001/api";
 
-export const isMockMode = import.meta.env.VITE_MOCK_API !== "false";
-
 export interface ApiEnvelope<T> {
   data: T;
   message: string;
