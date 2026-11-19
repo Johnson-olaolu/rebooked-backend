@@ -47,7 +47,7 @@ public class BookViews {
     public static final int RECENT_MAX = 20;
     static final Duration DEDUPE_TTL = Duration.ofHours(26);
     static final Duration RECENT_TTL = Duration.ofDays(30);
-    static final Duration DAY_BUCKET_TTL = Duration.ofDays(8);
+    public static final Duration DAY_BUCKET_TTL = Duration.ofDays(8);
     public static final ZoneId ZONE = ZoneId.of("Africa/Lagos");
     public static final DateTimeFormatter DAY = DateTimeFormatter.BASIC_ISO_DATE;
 

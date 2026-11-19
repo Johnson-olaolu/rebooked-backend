@@ -134,6 +134,32 @@ To build the project:
 ./gradlew build
 ```
 
+### Demo data (local only)
+
+Seeds about 5,000 real books (from Open Library, with covers) plus 1,200 sellers and readers, about 3,500 authors,
+sales, seller ratings, saved books, recently viewed and a week of views, so the shop, search and homepage behave
+like a live marketplace:
+
+```bash
+./gradlew bootRun --args='--seed.demo=true'          # seed once (skipped if demo data already exists), then serve
+./gradlew bootRun --args='--seed.demo.reset=true'    # remove all demo data; combine both flags to reseed
+```
+
+It refuses to run unless `MONGODB_URI` points at a local database (`--seed.demo.allow-remote=true` overrides that),
+and only adds data: everything it creates belongs to users with `@demo.rebooked.test` emails, which is how reset finds
+it. Options: `seed.demo.books` (default 5000), `seed.demo.random-seed` (default 42; the same seed gives the same data).
+
+Logins, all with password `Demo_1234!`:
+
+| Email | What it has |
+|---|---|
+| `seller@demo.rebooked.test` | The biggest shop, with sales and ratings |
+| `reader@demo.rebooked.test` | Saved books, recently viewed and purchases, so `/homepage/for-you` personalises |
+| `newbie@demo.rebooked.test` | No history: `/homepage/for-you` serves the global picks |
+
+The books come from `seed/openlibrary-books.json.gz`. To rebuild it from the Open Library search API (about 2 minutes):
+`python3 scripts/seed/fetch_openlibrary.py`.
+
 ## Contributing
 
 1. Fork the repository

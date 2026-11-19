@@ -31,6 +31,8 @@ public class CloudinaryService {
     }
 
     public  boolean delete (String cloudinaryPublicId){
+        // Files that point at an external URL (e.g. the demo seeder's Open Library covers) have nothing in Cloudinary
+        if (cloudinaryPublicId == null || cloudinaryPublicId.isBlank()) return true;
         try {
             Map result = cloudinary.uploader().destroy(cloudinaryPublicId, new HashMap());
             return "ok".equals(result.get("result"));

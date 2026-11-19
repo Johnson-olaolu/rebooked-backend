@@ -35,6 +35,14 @@ out/
 
 ### VS Code ###
 .vscode/
+.github/
+*.code-workspace
+
+### Node / Frontend ###
+node_modules/
+dist/
+coverage/
+*.tsbuildinfo
 
 ### Application Properties ###
 src/main/resources/application-dev.properties
@@ -46,10 +54,17 @@ logs/
 
 ### Environment Variables ###
 .env
-.env.local
-.env.development
-.env.test
-.env.production
+.env.*
+!.env.example
+
+### Azure ###
+.azure/.preview-temp/
+
+### Temporary Files ###
+*.tmp
+*.bak
+*.swp
+*.swo
 
 ### OS specific ###
 .DS_Store

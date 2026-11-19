@@ -37,6 +37,7 @@ import org.springframework.data.mongodb.core.MongoTemplate;
 import org.springframework.data.mongodb.core.query.Criteria;
 import org.springframework.data.mongodb.core.query.Query;
 import org.springframework.data.mongodb.core.query.Update;
+import org.springframework.core.annotation.Order;
 import org.springframework.stereotype.Component;
 
 import java.time.LocalDateTime;
@@ -50,8 +51,10 @@ import java.util.stream.Collectors;
 import static com.personal.rebooked.utils.Misc.generateRandomPrice;
 import static com.personal.rebooked.utils.Misc.getRandomElement;
 
+/** Runs on every start, before the opt-in demo seeder (seed.demo, @Order(100)) which needs the categories. */
 @RequiredArgsConstructor
 @Component
+@Order(0)
 public class Seeder implements ApplicationRunner {
 
 
