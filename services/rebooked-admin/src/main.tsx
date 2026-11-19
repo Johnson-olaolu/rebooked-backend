@@ -37,7 +37,7 @@ function AdminApp() {
   }, []);
 
   return (
-    <BrowserRouter>
+    <BrowserRouter basename={import.meta.env.PROD ? "/api/admin-dashboard" : undefined}>
       <FluentProvider theme={dark ? darkTheme : lightTheme}>
         <App />
       </FluentProvider>

@@ -71,6 +71,7 @@ public class SecurityConfig {
                     authorizeRequests
                             .requestMatchers("/").permitAll()
                             .requestMatchers("/error").permitAll()
+                            .requestMatchers("/admin-dashboard", "/admin-dashboard/**", "/admin-dashboard-assets/**").permitAll()
                             // The admin area (authors, imports): superAdmin only; first so nothing below can open it
                             .requestMatchers("/admin/**").hasAuthority(Constants.ROLE_SUPER_ADMIN)
                             // Settings → Password needs the session; must win over /auth/** below

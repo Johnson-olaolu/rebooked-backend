@@ -56,3 +56,30 @@ dependencies {
 tasks.named('test') {
     useJUnitPlatform()
 }
+
+def adminFrontendDir = file('services/rebooked-admin')
+def adminFrontendDist = file('services/rebooked-admin/dist')
+
+tasks.register('installAdminFrontend', Exec) {
+    workingDir adminFrontendDir
+    commandLine 'npm', 'ci'
+    inputs.files(file('services/rebooked-admin/package.json'), file('services/rebooked-admin/package-lock.json'))
+    outputs.file(file('services/rebooked-admin/node_modules/.package-lock.json'))
+}
+
+tasks.register('buildAdminFrontend', Exec) {
+    dependsOn tasks.named('installAdminFrontend')
+    workingDir adminFrontendDir
+    commandLine 'npm', 'run', 'build'
+    inputs.files(fileTree('services/rebooked-admin/src'), file('services/rebooked-admin/index.html'),
+            file('services/rebooked-admin/vite.config.ts'), file('services/rebooked-admin/tsconfig.json'),
+            file('services/rebooked-admin/package.json'), file('services/rebooked-admin/package-lock.json'))
+    outputs.dir(adminFrontendDist)
+}
+
+tasks.named('processResources') {
+    dependsOn tasks.named('buildAdminFrontend')
+    from(adminFrontendDist) {
+        into 'static/admin-dashboard'
+    }
+}

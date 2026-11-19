@@ -79,6 +79,8 @@ mongod
 
 The application will start on the specified PORT (default: 5001).
 
+The admin dashboard is served by the backend at `http://localhost:5001/api/admin-dashboard/`. Gradle installs the admin frontend dependencies, builds it, and packages the generated files into the Spring Boot application.
+
 ## API Documentation
 
 Once the application is running, you can access the Swagger UI documentation at:

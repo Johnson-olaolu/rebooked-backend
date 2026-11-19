@@ -2,7 +2,10 @@ import { liveClient } from "./liveClient";
 import { mockClient } from "./mockClient";
 import type { ApiClient } from "./types";
 
-export const api: ApiClient = import.meta.env.VITE_MOCK_API === "false" ? liveClient : mockClient;
+const useMockClient = import.meta.env.VITE_MOCK_API === "true"
+  || (import.meta.env.DEV && import.meta.env.VITE_MOCK_API !== "false");
+
+export const api: ApiClient = useMockClient ? mockClient : liveClient;
 export { ApiError } from "./client";
 export type {
   AdminUser,
